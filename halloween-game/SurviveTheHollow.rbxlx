@@ -1,0 +1,3336 @@
+<roblox version="4">
+  <Item class="ReplicatedStorage" referent="0">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="1">
+      <Properties>
+        <string name="Name">Shared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="2">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[-- Central game configuration. Tweak numbers here to balance the game.
+-- IMPORTANT: replace every `Id = 0` with your real Game Pass / Developer Product IDs
+-- (Creator Dashboard -> your experience -> Monetization). See GUIDE.md.
+
+local Config = {}
+
+Config.GameName = "Survive The Hollow"
+Config.DataStoreName = "SurviveTheHollow_v1"
+Config.AutoSaveInterval = 90
+
+-- In Studio, pretend the player owns every game pass (handy for testing).
+Config.StudioGrantAllPasses = false
+
+Config.Nights = 5
+Config.BloodMoonNight = 5 -- two monsters on this night
+Config.IntermissionTime = 20
+Config.DawnTime = 20
+Config.EndScreenTime = 10
+Config.NightLength = { 120, 140, 160, 180, 200 }
+
+Config.Monster = {
+	BaseSpeed = 13,
+	SpeedPerNight = 1.5,
+	EnragedMultiplier = 1.3, -- when the bonfire is out
+	HauntedMultiplier = 1.2, -- while chasing a haunted / tricked player
+	KillRange = 4.5,
+	RepathInterval = 0.4,
+	StunNeeded = 1.2, -- seconds of lantern light needed to scare it
+	StunTime = 4,
+	FleeSpeed = 22,
+	PauseAfterHit = 2,
+}
+
+Config.Bonfire = {
+	MaxFuel = 120,
+	StartFuel = 90,
+	DawnRefuel = 30,
+	LogFuel = 25,
+	DrainPerSec = 1,
+	MinRadius = 8,
+	RadiusPerFuel = 0.16,
+}
+
+Config.Flashlight = {
+	BaseRange = 30,
+	RangePerLevel = 6,
+	ConeDegrees = 22,
+	BaseBattery = 40,
+	BatteryPerLevel = 15,
+	DrainPerSec = 1,
+	RechargePerSecInLight = 4,
+}
+
+Config.Movement = {
+	WalkSpeed = 16,
+	SprintSpeed = 24,
+	BaseStamina = 4,
+	StaminaPerLevel = 1.2,
+	StaminaRegenPerSec = 1,
+	CarryMultiplier = 0.75,
+	DownedSpeed = 3,
+}
+
+Config.Downed = {
+	BleedOut = 30,
+	ReviveHold = 3,
+	ReviveReward = 15,
+}
+
+Config.Rewards = {
+	NightSurvived = { 20, 40, 60, 90, 130 },
+	Escape = 500,
+	ScareMonster = 5,
+	LogDelivered = 10,
+	CandyPickup = { 3, 8 },
+}
+
+Config.Pickups = {
+	Candy = 45,
+	Batteries = 10,
+	Logs = 14,
+	RespawnTime = 25,
+}
+
+Config.Doors = {
+	Cooldown = 45,
+	TrickChance = 0.15,
+	TrickChaseTime = 10,
+}
+
+Config.Multipliers = {
+	VIP = 1.5,
+	DoubleCandy = 2,
+}
+
+-- Upgrades bought with Candy (the free currency). Costs per level.
+Config.Upgrades = {
+	Lantern = { Name = "🔦 Lantern Range", Description = "Your light reaches farther.", Costs = { 100, 250, 600, 1500, 4000 } },
+	Battery = { Name = "🔋 Battery Size", Description = "Your lantern lasts longer.", Costs = { 100, 250, 600, 1500, 4000 } },
+	Stamina = { Name = "👟 Stamina", Description = "Sprint for longer.", Costs = { 80, 200, 500, 1200, 3000 } },
+}
+Config.UpgradeOrder = { "Lantern", "Battery", "Stamina" }
+
+-- Game passes: one-time purchases, owned forever.
+Config.GamePasses = {
+	DoubleCandy = { Id = 0, Name = "🍬 2x Candy", Description = "Double all candy you earn, forever.", Price = 299 },
+	VIP = { Id = 0, Name = "👑 VIP", Description = "+50% candy and a gold [VIP] chat tag.", Price = 199 },
+	InfiniteBattery = { Id = 0, Name = "🔦 Infinite Battery", Description = "Your lantern never runs out.", Price = 249 },
+	SecondWind = { Id = 0, Name = "💖 Second Wind", Description = "Get back up for free once every night.", Price = 199 },
+	MonsterRadar = { Id = 0, Name = "📡 Monster Radar", Description = "Always see where The Hollow is and how close.", Price = 149 },
+}
+Config.PassOrder = { "InfiniteBattery", "SecondWind", "DoubleCandy", "MonsterRadar", "VIP" }
+
+-- Developer products: can be bought again and again.
+Config.Products = {
+	SelfRevive = { Id = 0, Name = "💖 Revive", Description = "Get back up right now. Saved for later if you're fine.", Price = 25 },
+	BonfireRefill = { Id = 0, Name = "🔥 Refill Bonfire", Description = "Instantly fill the bonfire for the whole team.", Price = 19 },
+	ServerDaylight = {
+		Id = 0,
+		Name = "☀️ Daylight",
+		Description = "30 seconds of sunlight. The Hollow hides, everyone is safe.",
+		Price = 99,
+	},
+	HauntPlayer = {
+		Id = 0,
+		Name = "👻 Haunt a Player",
+		Description = "Send The Hollow after a player of your choice for 20s.",
+		Price = 49,
+	},
+	CandySmall = { Id = 0, Name = "🍬 Candy Bag", Description = "300 candy.", Price = 25 },
+	CandyLarge = { Id = 0, Name = "🍬 Candy Bucket", Description = "1,500 candy.", Price = 99 },
+	CandyHuge = { Id = 0, Name = "🍬 Candy Cauldron", Description = "6,000 candy.", Price = 299 },
+}
+Config.ProductOrder = { "SelfRevive", "BonfireRefill", "ServerDaylight", "HauntPlayer", "CandySmall", "CandyLarge", "CandyHuge" }
+
+Config.CandyPacks = { CandySmall = 300, CandyLarge = 1500, CandyHuge = 6000 }
+Config.DaylightDuration = 30
+Config.HauntDuration = 20
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="3">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[local Format = {}
+
+local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc" }
+
+function Format.Abbrev(n: number): string
+	n = tonumber(n) or 0
+	local negative = n < 0
+	n = math.abs(n)
+	if n < 1000 then
+		local s = tostring(math.floor(n))
+		return if negative then "-" .. s else s
+	end
+	local i = 1
+	while n >= 1000 and i < #SUFFIXES do
+		n /= 1000
+		i += 1
+	end
+	local s
+	if n >= 100 then
+		s = string.format("%d", math.floor(n))
+	elseif n >= 10 then
+		s = string.format("%.1f", math.floor(n * 10) / 10)
+	else
+		s = string.format("%.2f", math.floor(n * 100) / 100)
+	end
+	if string.find(s, ".", 1, true) then
+		s = (string.gsub(s, "0+$", ""))
+		s = (string.gsub(s, "%.$", ""))
+	end
+	s ..= SUFFIXES[i]
+	return if negative then "-" .. s else s
+end
+
+function Format.Cash(n: number): string
+	return "$" .. Format.Abbrev(n)
+end
+
+function Format.Time(seconds: number): string
+	seconds = math.max(0, math.floor(seconds))
+	local h = seconds // 3600
+	local m = (seconds % 3600) // 60
+	local s = seconds % 60
+	if h > 0 then
+		return string.format("%d:%02d:%02d", h, m, s)
+	end
+	return string.format("%d:%02d", m, s)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">Remotes</string>
+          <string name="Source"><![CDATA[-- Creates the remotes on the server and waits for them on the client.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local EVENTS = { "Notify", "Announce", "Jumpscare", "Aim", "ToggleFlashlight", "SetHauntTarget" }
+local FUNCTIONS = { "BuyUpgrade", "UseRevive" }
+
+local Remotes = {}
+
+if RunService:IsServer() then
+	local folder = ReplicatedStorage:FindFirstChild("Remotes")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "Remotes"
+		folder.Parent = ReplicatedStorage
+	end
+	for _, name in EVENTS do
+		local remote = folder:FindFirstChild(name) or Instance.new("RemoteEvent")
+		remote.Name = name
+		remote.Parent = folder
+		Remotes[name] = remote
+	end
+	for _, name in FUNCTIONS do
+		local remote = folder:FindFirstChild(name) or Instance.new("RemoteFunction")
+		remote.Name = name
+		remote.Parent = folder
+		Remotes[name] = remote
+	end
+else
+	local folder = ReplicatedStorage:WaitForChild("Remotes")
+	for _, name in EVENTS do
+		Remotes[name] = folder:WaitForChild(name)
+	end
+	for _, name in FUNCTIONS do
+		Remotes[name] = folder:WaitForChild(name)
+	end
+end
+
+-- Server helpers
+function Remotes.notify(player: Player, text: string, kind: string?)
+	Remotes.Notify:FireClient(player, text, kind or "info")
+end
+
+function Remotes.announce(text: string, color: Color3?)
+	Remotes.Announce:FireAllClients(text, if color then color:ToHex() else nil)
+end
+
+return Remotes
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="5">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="6">
+      <Properties>
+        <string name="Name">Server</string>
+      </Properties>
+      <Item class="ModuleScript" referent="7">
+        <Properties>
+          <string name="Name">DataService</string>
+          <string name="Source"><![CDATA[-- Loads/saves player data with retries, session locking and autosave.
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+
+local DataService = {}
+
+local SESSION_TIMEOUT = 300 -- a lock older than this is considered stale
+local profiles = {} -- [Player] = { Data = table, CanSave = boolean }
+
+local store
+pcall(function()
+	store = DataStoreService:GetDataStore(Config.DataStoreName)
+end)
+
+local function defaultData()
+	return {
+		Candy = 0,
+		Upgrades = { Lantern = 0, Battery = 0, Stamina = 0 },
+		NightsSurvived = 0,
+		BestNight = 0,
+		Escapes = 0,
+		ReviveTokens = 0,
+		ReceiptIds = {},
+	}
+end
+
+local function reconcile(data)
+	for key, value in defaultData() do
+		if data[key] == nil then
+			data[key] = value
+		end
+	end
+	for key, value in defaultData().Upgrades do
+		if data.Upgrades[key] == nil then
+			data.Upgrades[key] = value
+		end
+	end
+	return data
+end
+
+local function keyFor(player: Player)
+	return "Player_" .. player.UserId
+end
+
+local function setupLeaderstats(player: Player)
+	local stats = Instance.new("Folder")
+	stats.Name = "leaderstats"
+	for _, name in { "Candy", "Escapes", "Best Night" } do
+		local value = Instance.new("IntValue")
+		value.Name = name
+		value.Parent = stats
+	end
+	stats.Parent = player
+end
+
+function DataService.Load(player: Player)
+	local data, canSave = nil, false
+	if store then
+		for attempt = 1, 8 do
+			local lockedElsewhere = false
+			local ok, err = pcall(function()
+				data = store:UpdateAsync(keyFor(player), function(old)
+					old = old or defaultData()
+					local session = old.Session
+					if session and session.Job ~= game.JobId and os.time() - session.Time < SESSION_TIMEOUT and attempt < 8 then
+						lockedElsewhere = true
+						return nil -- cancel the write, another server still owns this data
+					end
+					old.Session = { Job = game.JobId, Time = os.time() }
+					return old
+				end)
+			end)
+			if ok and not lockedElsewhere and data then
+				canSave = true
+				break
+			end
+			if not ok then
+				warn("[DataService] Load failed for", player.Name, err)
+			end
+			if not player.Parent then
+				return nil
+			end
+			task.wait(if lockedElsewhere then 5 else attempt)
+		end
+	end
+
+	if not canSave then
+		warn("[DataService] Could not load data for " .. player.Name .. "; progress will NOT be saved this session.")
+		data = nil
+	end
+	data = reconcile(if type(data) == "table" then data else defaultData())
+
+	if not player.Parent then
+		if canSave then
+			pcall(function()
+				store:UpdateAsync(keyFor(player), function(old)
+					if old then
+						old.Session = nil
+					end
+					return old
+				end)
+			end)
+		end
+		return nil
+	end
+
+	profiles[player] = { Data = data, CanSave = canSave }
+	setupLeaderstats(player)
+	DataService.Sync(player)
+	return data
+end
+
+function DataService.Get(player: Player)
+	local profile = profiles[player]
+	return if profile then profile.Data else nil
+end
+
+function DataService.Save(player: Player, release: boolean?): boolean
+	local profile = profiles[player]
+	if not profile then
+		return false
+	end
+	if not profile.CanSave then
+		-- In Studio without API access we can't save; treat as success so purchases still work.
+		return RunService:IsStudio()
+	end
+	local data = profile.Data
+	data.Session = if release then nil else { Job = game.JobId, Time = os.time() }
+	for attempt = 1, 3 do
+		local ok, err = pcall(function()
+			store:UpdateAsync(keyFor(player), function()
+				return data
+			end)
+		end)
+		if ok then
+			return true
+		end
+		warn("[DataService] Save failed for", player.Name, err)
+		task.wait(attempt)
+	end
+	return false
+end
+
+function DataService.Release(player: Player)
+	if profiles[player] then
+		DataService.Save(player, true)
+		profiles[player] = nil
+	end
+end
+
+function DataService.Sync(player: Player)
+	local data = DataService.Get(player)
+	if not data then
+		return
+	end
+	player:SetAttribute("Candy", data.Candy)
+	player:SetAttribute("Escapes", data.Escapes)
+	player:SetAttribute("ReviveTokens", data.ReviveTokens)
+	for key, level in data.Upgrades do
+		player:SetAttribute("Up_" .. key, level)
+	end
+	local stats = player:FindFirstChild("leaderstats")
+	if stats then
+		stats.Candy.Value = data.Candy
+		stats.Escapes.Value = data.Escapes
+		stats["Best Night"].Value = data.BestNight
+	end
+end
+
+function DataService.CandyMultiplier(player: Player): number
+	local mult = 1
+	if player:GetAttribute("Pass_DoubleCandy") then
+		mult *= Config.Multipliers.DoubleCandy
+	end
+	if player:GetAttribute("Pass_VIP") then
+		mult *= Config.Multipliers.VIP
+	end
+	return mult
+end
+
+-- Gives candy. `boosted` applies pass multipliers (use it for gameplay rewards, not purchases).
+function DataService.AddCandy(player: Player, amount: number, boosted: boolean?): number
+	local data = DataService.Get(player)
+	if not data then
+		return 0
+	end
+	if boosted then
+		amount *= DataService.CandyMultiplier(player)
+	end
+	amount = math.floor(amount)
+	data.Candy += amount
+	DataService.Sync(player)
+	return amount
+end
+
+function DataService.SpendCandy(player: Player, amount: number): boolean
+	local data = DataService.Get(player)
+	if not data or data.Candy < amount then
+		return false
+	end
+	data.Candy -= amount
+	DataService.Sync(player)
+	return true
+end
+
+function DataService.Init()
+	task.spawn(function()
+		while true do
+			task.wait(Config.AutoSaveInterval)
+			for player in profiles do
+				task.spawn(DataService.Save, player)
+			end
+		end
+	end)
+
+	game:BindToClose(function()
+		local pending = 0
+		for player in profiles do
+			pending += 1
+			task.spawn(function()
+				DataService.Save(player, true)
+				pending -= 1
+			end)
+		end
+		local started = os.clock()
+		while pending > 0 and os.clock() - started < 25 do
+			task.wait(0.1)
+		end
+	end)
+end
+
+return DataService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="8">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[-- Entry point: starts every service and handles players joining/leaving.
+local Players = game:GetService("Players")
+
+local Server = script.Parent
+local DataService = require(Server.DataService)
+local World = require(Server.World)
+local MonsterService = require(Server.MonsterService)
+local PlayerService = require(Server.PlayerService)
+local PickupService = require(Server.PickupService)
+local RoundService = require(Server.RoundService)
+local MonetizationService = require(Server.MonetizationService)
+
+DataService.Init()
+World.Init()
+MonsterService.Init()
+PlayerService.Init()
+PickupService.Init()
+MonetizationService.Init()
+RoundService.Init()
+
+local function onPlayerAdded(player: Player)
+	PlayerService.OnPlayerAdded(player)
+	local data = DataService.Load(player)
+	if not data then
+		return
+	end
+	MonetizationService.LoadPasses(player)
+	player:SetAttribute("Loaded", true)
+	PlayerService.Spawn(player)
+end
+
+local function onPlayerRemoving(player: Player)
+	PickupService.DropLog(player)
+	PlayerService.OnPlayerRemoving(player)
+	DataService.Release(player)
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(onPlayerRemoving)
+for _, player in Players:GetPlayers() do
+	task.spawn(onPlayerAdded, player)
+end
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">MapBuilder</string>
+          <string name="Source"><![CDATA[-- Builds the haunted village from code: bonfire, houses, dead trees, graves, fog boundary.
+local MapBuilder = {}
+
+local MAP_RADIUS = 190
+local HOUSE_RING = 115
+local HOUSE_COUNT = 8
+
+local rng = Random.new(31102026) -- fixed seed: same village every server
+
+local function newPart(props, parent)
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.Material = Enum.Material.SmoothPlastic
+	for key, value in props do
+		part[key] = value
+	end
+	part.Parent = parent
+	return part
+end
+
+local function billboard(parent: BasePart, text: string, color: Color3, height: number)
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(160, 36)
+	gui.StudsOffsetWorldSpace = Vector3.new(0, height, 0)
+	gui.MaxDistance = 40
+	gui.LightInfluence = 0
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.Creepster
+	label.TextScaled = true
+	label.TextColor3 = color
+	label.Text = text
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2
+	stroke.Parent = label
+	label.Parent = gui
+	gui.Parent = parent
+	return label
+end
+
+local function buildBonfire(parent)
+	local folder = Instance.new("Model")
+	folder.Name = "Bonfire"
+	folder.Parent = parent
+
+	for i = 1, 10 do
+		local angle = i / 10 * math.pi * 2
+		newPart({
+			Name = "Stone",
+			Size = Vector3.new(1.6, 1.2, 1.6),
+			CFrame = CFrame.new(math.cos(angle) * 4, 0.6, math.sin(angle) * 4) * CFrame.Angles(0, angle, 0),
+			Color = Color3.fromRGB(80, 80, 85),
+			Material = Enum.Material.Slate,
+		}, folder)
+	end
+	for i = 1, 4 do
+		newPart({
+			Name = "Log",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(6, 1, 1),
+			CFrame = CFrame.new(0, 0.8, 0) * CFrame.Angles(0, i * math.pi / 4, math.rad(18)),
+			Color = Color3.fromRGB(90, 55, 30),
+			Material = Enum.Material.Wood,
+		}, folder)
+	end
+	local core = newPart({
+		Name = "FireCore",
+		Size = Vector3.new(2, 2, 2),
+		Position = Vector3.new(0, 2, 0),
+		Transparency = 1,
+		CanCollide = false,
+	}, folder)
+	local fire = Instance.new("Fire")
+	fire.Heat = 15
+	fire.Size = 10
+	fire.Color = Color3.fromRGB(255, 140, 30)
+	fire.SecondaryColor = Color3.fromRGB(255, 60, 0)
+	fire.Parent = core
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 150, 60)
+	light.Brightness = 3
+	light.Range = 30
+	light.Shadows = true
+	light.Parent = core
+
+	-- Glowing ring on the ground that shows the safe zone
+	local zone = newPart({
+		Name = "SafeZone",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.2, 40, 40),
+		CFrame = CFrame.new(0, 0.1, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = Color3.fromRGB(255, 140, 40),
+		Material = Enum.Material.Neon,
+		Transparency = 0.85,
+		CanCollide = false,
+		CanQuery = false,
+		CanTouch = false,
+	}, folder)
+
+	billboard(core, "🔥 BRING LOGS HERE", Color3.fromRGB(255, 190, 90), 6)
+	return { Model = folder, Core = core, Fire = fire, Light = light, Zone = zone }
+end
+
+local function buildHouse(index: number, angle: number, parent)
+	local center = Vector3.new(math.cos(angle) * HOUSE_RING, 0, math.sin(angle) * HOUSE_RING)
+	local facing = CFrame.lookAt(center, Vector3.new(0, 0, 0)) -- front faces the bonfire
+	local house = Instance.new("Model")
+	house.Name = "House" .. index
+	house.Parent = parent
+
+	local wallColor = ({ Color3.fromRGB(70, 60, 75), Color3.fromRGB(60, 70, 65), Color3.fromRGB(85, 70, 55) })[index % 3 + 1]
+	local function at(x, y, z)
+		return facing * CFrame.new(x, y, z)
+	end
+	newPart(
+		{ Name = "Body", Size = Vector3.new(20, 12, 16), CFrame = at(0, 6, 0), Color = wallColor, Material = Enum.Material.WoodPlanks },
+		house
+	)
+	newPart({
+		Name = "RoofL",
+		Size = Vector3.new(22, 1, 10.5),
+		CFrame = at(0, 14.5, 4) * CFrame.Angles(math.rad(-35), 0, 0),
+		Color = Color3.fromRGB(35, 25, 30),
+		Material = Enum.Material.Slate,
+	}, house)
+	newPart({
+		Name = "RoofR",
+		Size = Vector3.new(22, 1, 10.5),
+		CFrame = at(0, 14.5, -4) * CFrame.Angles(math.rad(35), 0, 0),
+		Color = Color3.fromRGB(35, 25, 30),
+		Material = Enum.Material.Slate,
+	}, house)
+	for _, x in { -6, 6 } do
+		newPart({
+			Name = "Window",
+			Size = Vector3.new(3, 3, 0.3),
+			CFrame = at(x, 7, -8.05),
+			Color = if rng:NextNumber() < 0.5 then Color3.fromRGB(255, 190, 80) else Color3.fromRGB(20, 20, 25),
+			Material = Enum.Material.Neon,
+		}, house)
+	end
+	local door = newPart({
+		Name = "Door",
+		Size = Vector3.new(4, 7, 0.4),
+		CFrame = at(0, 3.5, -8.1),
+		Color = Color3.fromRGB(60, 35, 20),
+		Material = Enum.Material.Wood,
+	}, house)
+	-- Jack-o'-lantern on the porch
+	local pumpkin = newPart({
+		Name = "Pumpkin",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(2.2, 2.2, 2.2),
+		CFrame = at(3.5, 1.1, -9.5),
+		Color = Color3.fromRGB(255, 120, 20),
+	}, house)
+	local glow = Instance.new("PointLight")
+	glow.Color = Color3.fromRGB(255, 140, 40)
+	glow.Range = 8
+	glow.Brightness = 1.5
+	glow.Parent = pumpkin
+
+	return { Model = house, Door = door, Center = center }
+end
+
+local function buildTree(position: Vector3, parent)
+	local height = rng:NextNumber(10, 18)
+	local tree = Instance.new("Model")
+	tree.Name = "DeadTree"
+	tree.Parent = parent
+	local trunk = newPart({
+		Name = "Trunk",
+		Size = Vector3.new(1.6, height, 1.6),
+		CFrame = CFrame.new(position + Vector3.new(0, height / 2, 0))
+			* CFrame.Angles(0, rng:NextNumber(0, 6), math.rad(rng:NextNumber(-6, 6))),
+		Color = Color3.fromRGB(45, 35, 30),
+		Material = Enum.Material.Wood,
+	}, tree)
+	for _ = 1, rng:NextInteger(2, 4) do
+		local length = rng:NextNumber(4, 8)
+		local base = trunk.Position + Vector3.new(0, rng:NextNumber(0, height / 2), 0)
+		newPart({
+			Name = "Branch",
+			Size = Vector3.new(0.6, length, 0.6),
+			CFrame = CFrame.new(base)
+				* CFrame.Angles(0, rng:NextNumber(0, 6.28), math.rad(rng:NextNumber(30, 70)))
+				* CFrame.new(0, length / 2, 0),
+			Color = Color3.fromRGB(45, 35, 30),
+			Material = Enum.Material.Wood,
+			CanCollide = false,
+		}, tree)
+	end
+end
+
+local function buildGrave(position: Vector3, parent)
+	local yaw = rng:NextNumber(-0.3, 0.3)
+	local stone = newPart({
+		Name = "Grave",
+		Size = Vector3.new(2.4, 3, 0.6),
+		CFrame = CFrame.new(position + Vector3.new(0, 1.5, 0)) * CFrame.Angles(math.rad(rng:NextNumber(-8, 8)), yaw, 0),
+		Color = Color3.fromRGB(110, 110, 120),
+		Material = Enum.Material.Slate,
+	}, parent)
+	local text = Instance.new("SurfaceGui")
+	text.Face = Enum.NormalId.Front
+	text.LightInfluence = 1
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.Creepster
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(40, 40, 45)
+	label.Text = "R.I.P"
+	label.Parent = text
+	text.Parent = stone
+end
+
+-- Returns a random ground position in the playable area that isn't inside a house.
+function MapBuilder.RandomSpot(houses, minRadius: number?, rand: Random?): Vector3
+	rand = rand or Random.new()
+	for _ = 1, 30 do
+		local angle = rand:NextNumber(0, math.pi * 2)
+		local radius = rand:NextNumber(minRadius or 25, MAP_RADIUS - 10)
+		local spot = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+		local clear = true
+		for _, house in houses do
+			if (house.Center - spot).Magnitude < 16 then
+				clear = false
+				break
+			end
+		end
+		if clear then
+			return spot
+		end
+	end
+	return Vector3.new(0, 0, 40)
+end
+
+function MapBuilder.Build()
+	local existing = workspace:FindFirstChild("Baseplate")
+	if existing then
+		existing:Destroy()
+	end
+
+	local map = Instance.new("Folder")
+	map.Name = "Map"
+	map.Parent = workspace
+
+	newPart({
+		Name = "Ground",
+		Size = Vector3.new(500, 2, 500),
+		Position = Vector3.new(0, -1, 0),
+		Color = Color3.fromRGB(35, 45, 30),
+		Material = Enum.Material.Grass,
+	}, map)
+
+	local bonfire = buildBonfire(map)
+
+	local houses = {}
+	for i = 1, HOUSE_COUNT do
+		table.insert(houses, buildHouse(i, (i - 0.5) / HOUSE_COUNT * math.pi * 2, map))
+	end
+
+	local nature = Instance.new("Folder")
+	nature.Name = "Nature"
+	nature.Parent = map
+	for _ = 1, 70 do
+		buildTree(MapBuilder.RandomSpot(houses, 35, rng), nature)
+	end
+	-- Graveyard cluster plus scattered graves
+	for row = 0, 3 do
+		for col = 0, 5 do
+			buildGrave(Vector3.new(-40 + col * 5, 0, 55 + row * 6), nature)
+		end
+	end
+	for _ = 1, 20 do
+		buildGrave(MapBuilder.RandomSpot(houses, 30, rng), nature)
+	end
+
+	-- Invisible boundary with a ring of crooked fence posts
+	for i = 0, 63 do
+		local angle = i / 64 * math.pi * 2
+		local pos = Vector3.new(math.cos(angle) * MAP_RADIUS, 0, math.sin(angle) * MAP_RADIUS)
+		newPart({
+			Name = "Barrier",
+			Size = Vector3.new(20, 40, 2),
+			CFrame = CFrame.lookAt(pos + Vector3.new(0, 20, 0), Vector3.new(0, 20, 0)),
+			Transparency = 1,
+		}, map)
+		newPart({
+			Name = "FencePost",
+			Size = Vector3.new(0.8, 6, 0.8),
+			CFrame = CFrame.new(pos + Vector3.new(0, 3, 0)) * CFrame.Angles(0, 0, math.rad(rng:NextNumber(-12, 12))),
+			Color = Color3.fromRGB(50, 40, 35),
+			Material = Enum.Material.Wood,
+		}, map)
+	end
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "BonfireSpawn"
+	spawn.Anchored = true
+	spawn.Size = Vector3.new(6, 0.2, 6)
+	spawn.Position = Vector3.new(0, 0.1, 9)
+	spawn.Transparency = 1
+	spawn.CanCollide = false
+	spawn.Neutral = true
+	spawn.Duration = 0
+	spawn.Parent = map
+
+	for _, name in { "Pickups", "Monsters" } do
+		local folder = Instance.new("Folder")
+		folder.Name = name
+		folder.Parent = workspace
+	end
+
+	return { Bonfire = bonfire, Houses = houses, Radius = MAP_RADIUS }
+end
+
+return MapBuilder
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">MonetizationService</string>
+          <string name="Source"><![CDATA[-- Game passes and developer products (this is where the Robux come from).
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Remotes = require(Shared.Remotes)
+
+local DataService = require(script.Parent.DataService)
+local MonsterService = require(script.Parent.MonsterService)
+local PlayerService = require(script.Parent.PlayerService)
+local RoundService = require(script.Parent.RoundService)
+local World = require(script.Parent.World)
+
+local MonetizationService = {}
+
+local MAX_RECEIPTS = 100
+
+function MonetizationService.LoadPasses(player: Player)
+	for key, pass in Config.GamePasses do
+		local owned = false
+		if pass.Id ~= 0 then
+			local ok, result = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, pass.Id)
+			owned = ok and result == true
+		end
+		if RunService:IsStudio() and Config.StudioGrantAllPasses then
+			owned = true
+		end
+		player:SetAttribute("Pass_" .. key, owned)
+	end
+end
+
+local function candyPack(key: string)
+	return function(player: Player)
+		local amount = DataService.AddCandy(player, Config.CandyPacks[key], false)
+		Remotes.notify(player, "🍬 +" .. amount .. " candy! Thanks for your support!", "success")
+	end
+end
+
+local productHandlers = {
+	CandySmall = candyPack("CandySmall"),
+	CandyLarge = candyPack("CandyLarge"),
+	CandyHuge = candyPack("CandyHuge"),
+
+	SelfRevive = function(player: Player, data)
+		if PlayerService.Revive(player) then
+			Remotes.notify(player, "💖 You're back on your feet!", "success")
+		else
+			data.ReviveTokens += 1
+			DataService.Sync(player)
+			Remotes.notify(player, "💖 Revive saved! It's ready next time you go down.", "success")
+		end
+	end,
+
+	BonfireRefill = function(player: Player)
+		World.SetFuel(Config.Bonfire.MaxFuel)
+		Remotes.announce("🔥 " .. player.DisplayName .. " refilled the bonfire for everyone!", Color3.fromRGB(255, 160, 60))
+	end,
+
+	ServerDaylight = function(player: Player)
+		local t = workspace:GetServerTimeNow()
+		local current = math.max(t, workspace:GetAttribute("DaylightUntil") or 0)
+		workspace:SetAttribute("DaylightUntil", current + Config.DaylightDuration)
+		Remotes.announce(
+			"☀️ " .. player.DisplayName .. " summoned DAYLIGHT! The Hollow hides. Grab logs and candy!",
+			Color3.fromRGB(255, 230, 120)
+		)
+	end,
+
+	HauntPlayer = function(player: Player)
+		local target = Players:GetPlayerByUserId(player:GetAttribute("HauntTarget") or 0)
+		if not target or target == player then
+			local others = {}
+			for _, other in Players:GetPlayers() do
+				if other ~= player then
+					table.insert(others, other)
+				end
+			end
+			target = others[math.random(1, math.max(1, #others))]
+		end
+		if not target or target == player then
+			DataService.AddCandy(player, 400, false)
+			Remotes.notify(player, "Nobody else is here to haunt, so you got 400 🍬 instead.", "info")
+			return
+		end
+		Remotes.announce(
+			"👻 " .. player.DisplayName .. " sent The Hollow after " .. target.DisplayName .. "!",
+			Color3.fromRGB(200, 120, 255)
+		)
+		if workspace:GetAttribute("Phase") == "Night" and MonsterService.Count() > 0 then
+			MonsterService.ForceTarget(target, Config.HauntDuration)
+			Remotes.Jumpscare:FireClient(target)
+		else
+			RoundService.QueueHaunt(target)
+			Remotes.notify(player, "👻 The haunt will start when the next night begins.", "info")
+		end
+	end,
+}
+
+local handlerById = {}
+for key, product in Config.Products do
+	if product.Id ~= 0 and productHandlers[key] then
+		handlerById[product.Id] = productHandlers[key]
+	end
+end
+
+local function processReceipt(info)
+	local player = Players:GetPlayerByUserId(info.PlayerId)
+	if not player then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local data = DataService.Get(player)
+	if not data then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	if data.ReceiptIds[info.PurchaseId] then
+		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+	local handler = handlerById[info.ProductId]
+	if not handler then
+		warn("[Monetization] No handler for product", info.ProductId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	local ok, err = pcall(handler, player, data)
+	if not ok then
+		warn("[Monetization] Handler error:", err)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	data.ReceiptIds[info.PurchaseId] = os.time()
+	local count, oldestId, oldestTime = 0, nil, math.huge
+	for id, time in data.ReceiptIds do
+		count += 1
+		if time < oldestTime then
+			oldestId, oldestTime = id, time
+		end
+	end
+	if count > MAX_RECEIPTS and oldestId then
+		data.ReceiptIds[oldestId] = nil
+	end
+
+	if not DataService.Save(player) then
+		-- Granted in memory (the receipt id prevents a double grant); Roblox will retry the save later.
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
+function MonetizationService.Init()
+	MarketplaceService.ProcessReceipt = processReceipt
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, purchased)
+		if not purchased then
+			return
+		end
+		for key, pass in Config.GamePasses do
+			if pass.Id ~= 0 and pass.Id == passId then
+				player:SetAttribute("Pass_" .. key, true)
+				Remotes.notify(player, "Thanks for buying " .. pass.Name .. "!", "success")
+			end
+		end
+	end)
+end
+
+return MonetizationService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
+          <string name="Name">MonsterService</string>
+          <string name="Source"><![CDATA[-- The Hollow: a pumpkin-headed scarecrow that hunts anyone outside the bonfire's light.
+-- It is moved directly (anchored) along PathfindingService paths, which keeps it reliable.
+local PathfindingService = game:GetService("PathfindingService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+
+local World = require(script.Parent.World)
+
+local MonsterService = {}
+MonsterService.OnCatch = nil -- set by PlayerService: function(player)
+
+local HEIGHT = 4.6 -- pivot height above the ground
+local monsters = {}
+local forcedTargets = {} -- [Player] = until (server time)
+local rng = Random.new()
+
+local function now()
+	return workspace:GetServerTimeNow()
+end
+
+local function flat(v: Vector3)
+	return Vector3.new(v.X, 0, v.Z)
+end
+
+local function newPart(props, parent)
+	local part = Instance.new("Part")
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.Material = Enum.Material.SmoothPlastic
+	part.CanCollide = false
+	part.Anchored = false
+	part.Massless = true
+	for key, value in props do
+		part[key] = value
+	end
+	part.Parent = parent
+	return part
+end
+
+local function buildModel(isBloodMoon: boolean)
+	local model = Instance.new("Model")
+	model.Name = "The Hollow"
+	local root = newPart({ Name = "Root", Size = Vector3.new(2, 2, 1), Transparency = 1, Anchored = true }, model)
+	model.PrimaryPart = root
+
+	local function attach(part: BasePart, offset: CFrame)
+		part.CFrame = root.CFrame * offset
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = root
+		weld.Part1 = part
+		weld.Parent = part
+		return part
+	end
+
+	local cloth = if isBloodMoon then Color3.fromRGB(70, 20, 25) else Color3.fromRGB(70, 55, 40)
+	attach(
+		newPart({ Name = "Torso", Size = Vector3.new(2.6, 3.4, 1.2), Color = cloth, Material = Enum.Material.Fabric }, model),
+		CFrame.new(0, 0.6, 0)
+	)
+	for _, x in { -1, 1 } do
+		attach(
+			newPart(
+				{ Name = "Leg", Size = Vector3.new(0.7, 3.4, 0.7), Color = Color3.fromRGB(50, 40, 30), Material = Enum.Material.Fabric },
+				model
+			),
+			CFrame.new(x * 0.6, -2.8, 0)
+		)
+		attach(
+			newPart({ Name = "Arm", Size = Vector3.new(0.6, 4.6, 0.6), Color = cloth, Material = Enum.Material.Fabric }, model),
+			CFrame.new(x * 1.8, 0.2, -0.8) * CFrame.Angles(math.rad(-60), 0, x * math.rad(8))
+		)
+		for f = -1, 1 do
+			attach(
+				newPart({ Name = "Claw", Size = Vector3.new(0.15, 1.2, 0.15), Color = Color3.fromRGB(220, 210, 180) }, model),
+				CFrame.new(x * 1.8 + f * 0.2, -1.1, -2.9) * CFrame.Angles(math.rad(-80), 0, 0)
+			)
+		end
+		-- Straw sticking out
+		attach(
+			newPart({ Name = "Straw", Size = Vector3.new(0.1, 1.2, 0.1), Color = Color3.fromRGB(230, 200, 90) }, model),
+			CFrame.new(x * 1.4, 2.2, 0) * CFrame.Angles(0, 0, x * 0.8)
+		)
+	end
+	local head = attach(
+		newPart({
+			Name = "Head",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(3, 3, 3),
+			Color = if isBloodMoon then Color3.fromRGB(150, 30, 20) else Color3.fromRGB(230, 110, 20),
+		}, model),
+		CFrame.new(0, 3.7, 0)
+	)
+	attach(newPart({ Name = "Stem", Size = Vector3.new(0.4, 0.8, 0.4), Color = Color3.fromRGB(60, 90, 30) }, model), CFrame.new(0, 5.4, 0))
+	attach(
+		newPart({ Name = "Hat", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.3, 5, 5), Color = Color3.fromRGB(25, 20, 25) }, model),
+		CFrame.new(0, 5.1, 0) * CFrame.Angles(0, 0, math.rad(90))
+	)
+	attach(
+		newPart({ Name = "HatTop", Size = Vector3.new(2, 2.4, 2), Color = Color3.fromRGB(25, 20, 25) }, model),
+		CFrame.new(0, 6.3, 0) * CFrame.Angles(0.2, 0, 0.15)
+	)
+
+	local eyeColor = if isBloodMoon then Color3.fromRGB(255, 30, 30) else Color3.fromRGB(255, 230, 60)
+	local eyes = {}
+	for _, x in { -0.6, 0.6 } do
+		table.insert(
+			eyes,
+			attach(
+				newPart({ Name = "Eye", Size = Vector3.new(0.7, 0.5, 0.2), Color = eyeColor, Material = Enum.Material.Neon }, model),
+				CFrame.new(x, 4.05, -1.4)
+			)
+		)
+	end
+	attach(
+		newPart({ Name = "Mouth", Size = Vector3.new(1.6, 0.35, 0.2), Color = eyeColor, Material = Enum.Material.Neon }, model),
+		CFrame.new(0, 3.2, -1.38)
+	)
+
+	local light = Instance.new("PointLight")
+	light.Color = eyeColor
+	light.Range = 10
+	light.Brightness = 2
+	light.Parent = head
+
+	return model, root, eyes
+end
+
+local function validTarget(player: Player)
+	if player:GetAttribute("Downed") or player:GetAttribute("Dead") then
+		return nil
+	end
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or humanoid.Health <= 0 or not root then
+		return nil
+	end
+	return root
+end
+
+local function pickTarget(monster)
+	local t = now()
+	-- Haunted / tricked players are chased first, wherever they are.
+	for player, untilTime in forcedTargets do
+		if t > untilTime or not player.Parent then
+			forcedTargets[player] = nil
+		else
+			local root = validTarget(player)
+			if root and not World.IsSafe(root.Position) then
+				return player, root, true
+			end
+		end
+	end
+	local best, bestRoot, bestDistance = nil, nil, math.huge
+	for _, player in Players:GetPlayers() do
+		local root = validTarget(player)
+		if root and not World.IsSafe(root.Position) then
+			local distance = (flat(root.Position) - monster.Position).Magnitude
+			if distance < bestDistance then
+				best, bestRoot, bestDistance = player, root, distance
+			end
+		end
+	end
+	return best, bestRoot, false
+end
+
+local function computePath(monster, goal: Vector3)
+	if monster.Computing then
+		return
+	end
+	monster.Computing = true
+	task.spawn(function()
+		local path = PathfindingService:CreatePath({ AgentRadius = 2.5, AgentHeight = 9, AgentCanJump = false })
+		local ok = pcall(function()
+			path:ComputeAsync(monster.Position + Vector3.new(0, 2, 0), goal + Vector3.new(0, 2, 0))
+		end)
+		if ok and path.Status == Enum.PathStatus.Success then
+			local points = {}
+			for _, waypoint in path:GetWaypoints() do
+				table.insert(points, flat(waypoint.Position))
+			end
+			monster.Waypoints = points
+			monster.WaypointIndex = 2
+		else
+			monster.Waypoints = nil
+		end
+		monster.LastPath = os.clock()
+		monster.Computing = false
+	end)
+end
+
+local function setEyes(monster, color: Color3)
+	for _, eye in monster.Eyes do
+		eye.Color = color
+	end
+end
+
+local function step(monster, dt: number)
+	local t = now()
+	local speed = monster.Speed
+	if World.Fuel <= 0 then
+		speed *= Config.Monster.EnragedMultiplier
+	end
+
+	local goal
+	if World.IsDaylight() then
+		-- Hide at the edge of the map in daylight
+		goal = monster.Home
+		speed = Config.Monster.FleeSpeed
+		monster.Target = nil
+	elseif t < monster.StunnedUntil then
+		local away = monster.Position.Magnitude > 1 and monster.Position.Unit or Vector3.new(1, 0, 0)
+		goal = monster.Position + away * 20
+		speed = Config.Monster.FleeSpeed
+	elseif t < monster.PausedUntil then
+		return
+	else
+		if monster.StunnedUntil > 0 and t >= monster.StunnedUntil then
+			monster.StunnedUntil = 0
+			setEyes(monster, monster.EyeColor)
+		end
+		local player, targetRoot, forced = pickTarget(monster)
+		monster.Target = player
+		if targetRoot then
+			if forced then
+				speed *= Config.Monster.HauntedMultiplier
+			end
+			local targetPos = flat(targetRoot.Position)
+			if (targetPos - monster.Position).Magnitude < 14 then
+				goal = targetPos
+				monster.Waypoints = nil
+			else
+				if os.clock() - monster.LastPath > Config.Monster.RepathInterval then
+					computePath(monster, targetPos)
+				end
+				if monster.Waypoints and monster.Waypoints[monster.WaypointIndex] then
+					goal = monster.Waypoints[monster.WaypointIndex]
+				else
+					goal = targetPos
+				end
+			end
+		else
+			-- Nobody to hunt: prowl around the edge of the light
+			if not monster.WanderGoal or (monster.WanderGoal - monster.Position).Magnitude < 3 then
+				local angle = rng:NextNumber(0, math.pi * 2)
+				local radius = World.SafeRadius() + rng:NextNumber(8, 25)
+				monster.WanderGoal = Vector3.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+			end
+			goal = monster.WanderGoal
+			speed *= 0.6
+		end
+	end
+
+	local offset = goal - monster.Position
+	local distance = offset.Magnitude
+	if distance > 0.05 then
+		local direction = offset.Unit
+		local move = math.min(distance, speed * dt)
+		local nextPos = monster.Position + direction * move
+		-- The light keeps it out
+		local safe = World.SafeRadius()
+		if safe > 0 and nextPos.Magnitude < safe + 1.5 then
+			nextPos = (if nextPos.Magnitude > 0.1 then nextPos.Unit else Vector3.new(1, 0, 0)) * (safe + 1.5)
+		end
+		-- Stay inside the map
+		if nextPos.Magnitude > World.MapRadius - 4 then
+			nextPos = nextPos.Unit * (World.MapRadius - 4)
+		end
+		monster.Position = nextPos
+		monster.Facing = direction
+		if monster.Waypoints and goal == monster.Waypoints[monster.WaypointIndex] and (goal - nextPos).Magnitude < 1.5 then
+			monster.WaypointIndex += 1
+		end
+	end
+	local pivot = monster.Position + Vector3.new(0, HEIGHT, 0)
+	local bob = math.sin(os.clock() * 8) * 0.15
+	monster.Model:PivotTo(CFrame.lookAt(pivot + Vector3.new(0, bob, 0), pivot + monster.Facing))
+
+	-- Catching players
+	if World.IsDaylight() or t < monster.StunnedUntil then
+		return
+	end
+	for _, player in Players:GetPlayers() do
+		local root = validTarget(player)
+		if root and not World.IsSafe(root.Position) then
+			if
+				(flat(root.Position) - monster.Position).Magnitude < Config.Monster.KillRange
+				and math.abs(root.Position.Y - pivot.Y) < 8
+			then
+				monster.PausedUntil = t + Config.Monster.PauseAfterHit
+				forcedTargets[player] = nil
+				if MonsterService.OnCatch then
+					MonsterService.OnCatch(player)
+				end
+			end
+		end
+	end
+end
+
+function MonsterService.Spawn(isBloodMoon: boolean, nightIndex: number)
+	local model, root, eyes = buildModel(isBloodMoon)
+	local angle = rng:NextNumber(0, math.pi * 2)
+	local home = Vector3.new(math.cos(angle), 0, math.sin(angle)) * (World.MapRadius - 15)
+	local monster = {
+		Model = model,
+		Root = root,
+		Eyes = eyes,
+		EyeColor = eyes[1].Color,
+		Home = home,
+		Position = home,
+		Facing = -home.Unit,
+		Speed = Config.Monster.BaseSpeed + Config.Monster.SpeedPerNight * (nightIndex - 1),
+		StunMeter = 0,
+		StunnedUntil = 0,
+		PausedUntil = 0,
+		LastPath = 0,
+		Computing = false,
+	}
+	model:PivotTo(CFrame.lookAt(home + Vector3.new(0, HEIGHT, 0), Vector3.new(0, HEIGHT, 0)))
+	model.Parent = workspace:WaitForChild("Monsters")
+	table.insert(monsters, monster)
+	return monster
+end
+
+function MonsterService.DespawnAll()
+	for _, monster in monsters do
+		monster.Model:Destroy()
+	end
+	table.clear(monsters)
+	table.clear(forcedTargets)
+end
+
+function MonsterService.ForceTarget(player: Player, seconds: number)
+	forcedTargets[player] = math.max(forcedTargets[player] or 0, now()) + seconds
+end
+
+function MonsterService.Count(): number
+	return #monsters
+end
+
+-- Called by PlayerService while a player's lantern is on. Returns true if this light scared a monster away.
+function MonsterService.ApplyLight(player: Player, origin: Vector3, direction: Vector3, range: number, dt: number): boolean
+	local scared = false
+	local cosCone = math.cos(math.rad(Config.Flashlight.ConeDegrees))
+	for _, monster in monsters do
+		if now() >= monster.StunnedUntil then
+			local center = monster.Position + Vector3.new(0, HEIGHT + 1, 0)
+			local toMonster = center - origin
+			local distance = toMonster.Magnitude
+			local lit = false
+			if distance < range and distance > 0.1 and toMonster.Unit:Dot(direction) > cosCone then
+				local params = RaycastParams.new()
+				params.FilterType = Enum.RaycastFilterType.Exclude
+				params.FilterDescendantsInstances = { player.Character, monster.Model, workspace:WaitForChild("Pickups") }
+				lit = workspace:Raycast(origin, toMonster, params) == nil
+			end
+			if lit then
+				monster.StunMeter += dt
+				if monster.StunMeter >= Config.Monster.StunNeeded then
+					monster.StunMeter = 0
+					monster.StunnedUntil = now() + Config.Monster.StunTime
+					monster.Waypoints = nil
+					setEyes(monster, Color3.new(1, 1, 1))
+					scared = true
+				end
+			end
+		end
+	end
+	return scared
+end
+
+function MonsterService.Init()
+	RunService.Heartbeat:Connect(function(dt)
+		for _, monster in monsters do
+			monster.StunMeter = math.max(0, monster.StunMeter - dt * 0.25)
+			local ok, err = pcall(step, monster, dt)
+			if not ok then
+				warn("[MonsterService] step error:", err)
+			end
+		end
+	end)
+end
+
+return MonsterService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="12">
+        <Properties>
+          <string name="Name">PickupService</string>
+          <string name="Source"><![CDATA[-- Candy, batteries and logs scattered in the dark, plus trick-or-treat doors on every house.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Remotes = require(Shared.Remotes)
+
+local DataService = require(script.Parent.DataService)
+local MonsterService = require(script.Parent.MonsterService)
+local PlayerService = require(script.Parent.PlayerService)
+local World = require(script.Parent.World)
+
+local PickupService = {}
+
+local rng = Random.new()
+local folder
+
+local function playerFromHit(hit: BasePart)
+	local character = hit:FindFirstAncestorOfClass("Model")
+	return character and Players:GetPlayerFromCharacter(character)
+end
+
+local function newPart(props)
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = false
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	for key, value in props do
+		part[key] = value
+	end
+	return part
+end
+
+local function glow(part: BasePart, color: Color3, range: number)
+	local light = Instance.new("PointLight")
+	light.Color = color
+	light.Range = range
+	light.Brightness = 1
+	light.Parent = part
+end
+
+local spawnPickup
+
+local function give(kind: string, player: Player): boolean
+	if kind == "Candy" then
+		local amount = DataService.AddCandy(player, rng:NextInteger(Config.Rewards.CandyPickup[1], Config.Rewards.CandyPickup[2]), true)
+		Remotes.notify(player, "+" .. amount .. " 🍬", "success")
+		return true
+	elseif kind == "Battery" then
+		local max = PlayerService.BatteryMax(player)
+		if (player:GetAttribute("Battery") or 0) >= max - 0.5 then
+			return false
+		end
+		player:SetAttribute("Battery", max)
+		Remotes.notify(player, "🔋 Lantern fully charged!", "success")
+		return true
+	elseif kind == "Log" then
+		if player:GetAttribute("CarryingLog") then
+			return false
+		end
+		PickupService.GiveLog(player)
+		return true
+	end
+	return false
+end
+
+function spawnPickup(kind: string, position: Vector3?)
+	position = position or World.RandomSpot(20)
+	local part
+	if kind == "Candy" then
+		part = newPart({
+			Name = "Candy",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(1.3, 1.3, 1.3),
+			Color = Color3.fromRGB(255, 140, 30),
+			Material = Enum.Material.Neon,
+			Position = position + Vector3.new(0, 1, 0),
+		})
+		glow(part, Color3.fromRGB(255, 140, 30), 6)
+	elseif kind == "Battery" then
+		part = newPart({
+			Name = "Battery",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1.8, 0.9, 0.9),
+			CFrame = CFrame.new(position + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = Color3.fromRGB(90, 255, 120),
+			Material = Enum.Material.Neon,
+		})
+		glow(part, Color3.fromRGB(90, 255, 120), 8)
+	else
+		part = newPart({
+			Name = "Log",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(3.6, 1.1, 1.1),
+			CFrame = CFrame.new(position + Vector3.new(0, 0.6, 0)) * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0),
+			Color = Color3.fromRGB(110, 70, 40),
+			Material = Enum.Material.Wood,
+		})
+		glow(part, Color3.fromRGB(255, 200, 120), 5)
+	end
+	part:SetAttribute("Kind", kind)
+
+	local taken = false
+	part.Touched:Connect(function(hit)
+		if taken then
+			return
+		end
+		local player = playerFromHit(hit)
+		if player and PlayerService.IsActive(player) and give(kind, player) then
+			taken = true
+			part:Destroy()
+			task.delay(Config.Pickups.RespawnTime, spawnPickup, kind)
+		end
+	end)
+	part.Parent = folder
+	return part
+end
+
+function PickupService.GiveLog(player: Player)
+	player:SetAttribute("CarryingLog", true)
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if root then
+		local log = Instance.new("Part")
+		log.Name = "CarriedLog"
+		log.Shape = Enum.PartType.Cylinder
+		log.Size = Vector3.new(3.6, 1.1, 1.1)
+		log.Color = Color3.fromRGB(110, 70, 40)
+		log.Material = Enum.Material.Wood
+		log.CanCollide = false
+		log.CanTouch = false
+		log.CanQuery = false
+		log.Massless = true
+		log.CFrame = root.CFrame * CFrame.new(0, 0.5, 1)
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = root
+		weld.Part1 = log
+		weld.Parent = log
+		log.Parent = character
+	end
+	Remotes.notify(player, "🪵 Got a log! Bring it to the bonfire.", "info")
+end
+
+local function clearLog(player: Player)
+	player:SetAttribute("CarryingLog", false)
+	local character = player.Character
+	local log = character and character:FindFirstChild("CarriedLog")
+	if log then
+		log:Destroy()
+	end
+end
+
+-- Called when a player is downed or dies: the log falls where they stand.
+function PickupService.DropLog(player: Player)
+	if not player:GetAttribute("CarryingLog") then
+		return
+	end
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	clearLog(player)
+	if root then
+		spawnPickup("Log", Vector3.new(root.Position.X, 0, root.Position.Z) + Vector3.new(2, 0, 0))
+	else
+		task.delay(Config.Pickups.RespawnTime, spawnPickup, "Log")
+	end
+end
+
+local function checkDeliveries()
+	for _, player in Players:GetPlayers() do
+		if player:GetAttribute("CarryingLog") then
+			local root = PlayerService.IsActive(player)
+			if root then
+				local flat = Vector3.new(root.Position.X, 0, root.Position.Z)
+				if flat.Magnitude < math.max(World.SafeRadius(), 10) then
+					clearLog(player)
+					World.AddFuel(Config.Bonfire.LogFuel)
+					local earned = DataService.AddCandy(player, Config.Rewards.LogDelivered, true)
+					Remotes.notify(player, "🔥 The fire grows! +" .. earned .. " 🍬", "success")
+					task.delay(Config.Pickups.RespawnTime, spawnPickup, "Log")
+				end
+			end
+		end
+	end
+end
+
+local function setupDoor(house)
+	local door = house.Door
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "KnockPrompt"
+	prompt.ActionText = "Knock"
+	prompt.ObjectText = "🎃 Trick or Treat?"
+	prompt.HoldDuration = 0.6
+	prompt.MaxActivationDistance = 8
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = door
+
+	prompt.Triggered:Connect(function(player)
+		if not prompt.Enabled or not PlayerService.IsActive(player) then
+			return
+		end
+		prompt.Enabled = false
+		task.delay(Config.Doors.Cooldown, function()
+			prompt.Enabled = true
+		end)
+
+		local roll = rng:NextNumber()
+		local isNight = workspace:GetAttribute("Phase") == "Night"
+		if roll < Config.Doors.TrickChance and isNight then
+			MonsterService.ForceTarget(player, Config.Doors.TrickChaseTime)
+			Remotes.Jumpscare:FireClient(player)
+			Remotes.notify(player, "🎃 TRICK! The Hollow heard you knocking... RUN!", "error")
+		elseif roll < 0.35 then
+			player:SetAttribute("Battery", PlayerService.BatteryMax(player))
+			Remotes.notify(player, "🍭 TREAT! Someone handed you fresh batteries.", "success")
+		elseif roll < 0.5 and not player:GetAttribute("CarryingLog") then
+			PickupService.GiveLog(player)
+		else
+			local amount = DataService.AddCandy(player, rng:NextInteger(10, 30), true)
+			Remotes.notify(player, "🍬 TREAT! +" .. amount .. " candy.", "success")
+		end
+	end)
+end
+
+function PickupService.Init()
+	folder = workspace:WaitForChild("Pickups")
+	for _ = 1, Config.Pickups.Candy do
+		spawnPickup("Candy")
+	end
+	for _ = 1, Config.Pickups.Batteries do
+		spawnPickup("Battery")
+	end
+	for _ = 1, Config.Pickups.Logs do
+		spawnPickup("Log")
+	end
+	for _, house in World.Houses do
+		setupDoor(house)
+	end
+	PlayerService.OnDowned = PickupService.DropLog
+
+	task.spawn(function()
+		while true do
+			task.wait(0.2)
+			local ok, err = pcall(checkDeliveries)
+			if not ok then
+				warn("[PickupService] delivery error:", err)
+			end
+		end
+	end)
+end
+
+return PickupService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="13">
+        <Properties>
+          <string name="Name">PlayerService</string>
+          <string name="Source"><![CDATA[-- Everything about a player's body: lantern & battery, getting downed, reviving, dying, upgrades.
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Remotes = require(Shared.Remotes)
+
+local DataService = require(script.Parent.DataService)
+local MonsterService = require(script.Parent.MonsterService)
+local World = require(script.Parent.World)
+
+local PlayerService = {}
+PlayerService.OnDowned = nil -- set by PickupService: function(player) drops a carried log
+
+local lanterns = {} -- [Player] = { Attachment, Light }
+local aims = {} -- [Player] = Vector3
+local secondWindUsed = {} -- [Player] = true
+
+local function now()
+	return workspace:GetServerTimeNow()
+end
+
+local function getHumanoid(player: Player)
+	local character = player.Character
+	return character and character:FindFirstChildOfClass("Humanoid"), character and character:FindFirstChild("HumanoidRootPart")
+end
+
+function PlayerService.BatteryMax(player: Player): number
+	return Config.Flashlight.BaseBattery + (player:GetAttribute("Up_Battery") or 0) * Config.Flashlight.BatteryPerLevel
+end
+
+function PlayerService.LanternRange(player: Player): number
+	return Config.Flashlight.BaseRange + (player:GetAttribute("Up_Lantern") or 0) * Config.Flashlight.RangePerLevel
+end
+
+-- Returns the player's root part if they're alive and standing, else nil.
+function PlayerService.IsActive(player: Player)
+	if player:GetAttribute("Downed") or player:GetAttribute("Dead") then
+		return nil
+	end
+	local humanoid, root = getHumanoid(player)
+	if humanoid and humanoid.Health > 0 and root then
+		return root
+	end
+	return nil
+end
+
+local function setFlashlight(player: Player, on: boolean)
+	local lantern = lanterns[player]
+	if lantern then
+		lantern.Light.Enabled = on
+	end
+	player:SetAttribute("FlashlightOn", on)
+end
+
+local function refreshStats(player: Player)
+	player:SetAttribute("BatteryMax", PlayerService.BatteryMax(player))
+	player:SetAttribute("LanternRange", PlayerService.LanternRange(player))
+	local lantern = lanterns[player]
+	if lantern then
+		lantern.Light.Range = PlayerService.LanternRange(player)
+	end
+end
+
+local function setupCharacter(player: Player, character: Model)
+	player:SetAttribute("Downed", false)
+	player:SetAttribute("Dead", false)
+	player:SetAttribute("CarryingLog", false)
+	refreshStats(player)
+	player:SetAttribute("Battery", PlayerService.BatteryMax(player))
+	setFlashlight(player, false)
+
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	local root = character:WaitForChild("HumanoidRootPart", 10)
+	if not humanoid or not root then
+		return
+	end
+
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "LanternAttachment"
+	attachment.Position = Vector3.new(0.8, 1.2, -0.8)
+	attachment.Parent = root
+	local light = Instance.new("SpotLight")
+	light.Brightness = 5
+	light.Angle = 50
+	light.Range = PlayerService.LanternRange(player)
+	light.Color = Color3.fromRGB(255, 235, 190)
+	light.Face = Enum.NormalId.Front
+	light.Shadows = true
+	light.Enabled = false
+	light.Parent = attachment
+	lanterns[player] = { Attachment = attachment, Light = light }
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "RevivePrompt"
+	prompt.ActionText = "Revive"
+	prompt.ObjectText = player.DisplayName
+	prompt.HoldDuration = Config.Downed.ReviveHold
+	prompt.MaxActivationDistance = 9
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = false
+	prompt:SetAttribute("OwnerId", player.UserId)
+	CollectionService:AddTag(prompt, "RevivePrompt")
+	prompt.Triggered:Connect(function(reviver)
+		if reviver ~= player and PlayerService.IsActive(reviver) and player:GetAttribute("Downed") then
+			PlayerService.StandUp(player)
+			local earned = DataService.AddCandy(reviver, Config.Downed.ReviveReward, true)
+			Remotes.notify(reviver, "💖 You revived " .. player.DisplayName .. "! +" .. earned .. " 🍬", "success")
+			Remotes.notify(player, "💖 " .. reviver.DisplayName .. " revived you!", "success")
+		end
+	end)
+	prompt.Parent = root
+
+	humanoid.Died:Connect(function()
+		if PlayerService.OnDowned then
+			PlayerService.OnDowned(player)
+		end
+		setFlashlight(player, false)
+		player:SetAttribute("Downed", false)
+		player:SetAttribute("Dead", true)
+		prompt.Enabled = false
+	end)
+end
+
+function PlayerService.Down(player: Player)
+	if not PlayerService.IsActive(player) then
+		return
+	end
+	local humanoid, root = getHumanoid(player)
+	player:SetAttribute("Downed", true)
+	player:SetAttribute("DownedUntil", now() + Config.Downed.BleedOut)
+	setFlashlight(player, false)
+	if PlayerService.OnDowned then
+		PlayerService.OnDowned(player)
+	end
+	humanoid.WalkSpeed = Config.Movement.DownedSpeed
+	local prompt = root:FindFirstChild("RevivePrompt")
+	if prompt then
+		prompt.Enabled = true
+	end
+	Remotes.Jumpscare:FireClient(player)
+	for _, other in Players:GetPlayers() do
+		if other ~= player then
+			Remotes.notify(other, "🆘 " .. player.DisplayName .. " is down! Revive them (hold E)!", "error")
+		end
+	end
+end
+
+function PlayerService.StandUp(player: Player)
+	local humanoid, root = getHumanoid(player)
+	player:SetAttribute("Downed", false)
+	if humanoid then
+		humanoid.Health = humanoid.MaxHealth
+		humanoid.WalkSpeed = Config.Movement.WalkSpeed
+	end
+	local prompt = root and root:FindFirstChild("RevivePrompt")
+	if prompt then
+		prompt.Enabled = false
+	end
+end
+
+function PlayerService.Die(player: Player)
+	local humanoid = getHumanoid(player)
+	player:SetAttribute("Downed", false)
+	player:SetAttribute("Dead", true)
+	if humanoid then
+		humanoid.Health = 0
+	end
+end
+
+-- Gets a downed or dead player back on their feet. Returns false if they didn't need it.
+function PlayerService.Revive(player: Player): boolean
+	if player:GetAttribute("Downed") then
+		PlayerService.StandUp(player)
+		return true
+	end
+	local humanoid = getHumanoid(player)
+	if player:GetAttribute("Dead") or not humanoid or humanoid.Health <= 0 then
+		player:LoadCharacter()
+		return true
+	end
+	return false
+end
+
+function PlayerService.Spawn(player: Player)
+	player:LoadCharacter()
+end
+
+-- Start of a night / dawn: everyone gets back up.
+function PlayerService.ReviveAll()
+	for _, player in Players:GetPlayers() do
+		if player:GetAttribute("Loaded") then
+			PlayerService.Revive(player)
+		end
+	end
+end
+
+function PlayerService.ResetNight()
+	table.clear(secondWindUsed)
+end
+
+local function useRevive(player: Player, kind: string)
+	if not (player:GetAttribute("Downed") or player:GetAttribute("Dead")) then
+		return false, "You're not down!"
+	end
+	if kind == "SecondWind" then
+		if not player:GetAttribute("Pass_SecondWind") then
+			return false, "You need the Second Wind pass."
+		end
+		if secondWindUsed[player] then
+			return false, "Second Wind already used tonight."
+		end
+		secondWindUsed[player] = true
+	elseif kind == "Token" then
+		local data = DataService.Get(player)
+		if not data or data.ReviveTokens <= 0 then
+			return false, "You have no revive tokens."
+		end
+		data.ReviveTokens -= 1
+		DataService.Sync(player)
+	else
+		return false, "Unknown revive."
+	end
+	PlayerService.Revive(player)
+	return true, "💖 You're back on your feet!"
+end
+
+local function buyUpgrade(player: Player, key: string)
+	local upgrade = Config.Upgrades[key]
+	local data = DataService.Get(player)
+	if type(key) ~= "string" or not upgrade or not data then
+		return false, "Unknown upgrade."
+	end
+	local level = data.Upgrades[key] or 0
+	local cost = upgrade.Costs[level + 1]
+	if not cost then
+		return false, "Already maxed!"
+	end
+	if not DataService.SpendCandy(player, cost) then
+		return false, "You need " .. cost .. " 🍬"
+	end
+	data.Upgrades[key] = level + 1
+	DataService.Sync(player)
+	refreshStats(player)
+	return true, upgrade.Name .. " is now level " .. (level + 1) .. "!"
+end
+
+local function tick(dt: number)
+	local t = now()
+	for _, player in Players:GetPlayers() do
+		local root = PlayerService.IsActive(player)
+		if root then
+			local battery = player:GetAttribute("Battery") or 0
+			local max = PlayerService.BatteryMax(player)
+			if player:GetAttribute("FlashlightOn") then
+				if not player:GetAttribute("Pass_InfiniteBattery") then
+					battery -= Config.Flashlight.DrainPerSec * dt
+					if battery <= 0 then
+						battery = 0
+						setFlashlight(player, false)
+						Remotes.notify(player, "🔦 Your lantern died! Recharge it by the bonfire.", "error")
+					end
+				end
+				local lantern = lanterns[player]
+				local aim = aims[player]
+				if lantern and aim and player:GetAttribute("FlashlightOn") then
+					local scared =
+						MonsterService.ApplyLight(player, lantern.Attachment.WorldPosition, aim, PlayerService.LanternRange(player), dt)
+					if scared then
+						local earned = DataService.AddCandy(player, Config.Rewards.ScareMonster, true)
+						Remotes.notify(player, "😤 You scared The Hollow away! +" .. earned .. " 🍬", "success")
+					end
+				end
+			elseif World.IsSafe(root.Position) then
+				battery = math.min(max, battery + Config.Flashlight.RechargePerSecInLight * dt)
+			end
+			player:SetAttribute("Battery", math.floor(battery * 10) / 10)
+		elseif player:GetAttribute("Downed") and t > (player:GetAttribute("DownedUntil") or 0) then
+			PlayerService.Die(player)
+			Remotes.notify(player, "💀 You didn't make it. You'll be back at dawn.", "error")
+		end
+	end
+end
+
+function PlayerService.OnPlayerAdded(player: Player)
+	player.CharacterAdded:Connect(function(character)
+		setupCharacter(player, character)
+	end)
+	player:GetAttributeChangedSignal("Up_Lantern"):Connect(function()
+		refreshStats(player)
+	end)
+	player:GetAttributeChangedSignal("Up_Battery"):Connect(function()
+		refreshStats(player)
+	end)
+end
+
+function PlayerService.OnPlayerRemoving(player: Player)
+	lanterns[player] = nil
+	aims[player] = nil
+	secondWindUsed[player] = nil
+end
+
+function PlayerService.Init()
+	Players.CharacterAutoLoads = false
+
+	Remotes.ToggleFlashlight.OnServerEvent:Connect(function(player, on)
+		if
+			on == true
+			and PlayerService.IsActive(player)
+			and ((player:GetAttribute("Battery") or 0) > 0 or player:GetAttribute("Pass_InfiniteBattery"))
+		then
+			setFlashlight(player, true)
+		else
+			setFlashlight(player, false)
+		end
+	end)
+
+	Remotes.Aim.OnServerEvent:Connect(function(player, direction)
+		if typeof(direction) ~= "Vector3" or direction.Magnitude < 0.5 or direction.Magnitude > 1.5 then
+			return
+		end
+		direction = direction.Unit
+		aims[player] = direction
+		local lantern = lanterns[player]
+		if lantern and lantern.Attachment.Parent then
+			local origin = lantern.Attachment.WorldPosition
+			lantern.Attachment.WorldCFrame = CFrame.lookAt(origin, origin + direction)
+		end
+	end)
+
+	Remotes.SetHauntTarget.OnServerEvent:Connect(function(player, userId)
+		if type(userId) == "number" then
+			player:SetAttribute("HauntTarget", userId)
+		end
+	end)
+
+	Remotes.UseRevive.OnServerInvoke = useRevive
+	Remotes.BuyUpgrade.OnServerInvoke = buyUpgrade
+
+	MonsterService.OnCatch = PlayerService.Down
+
+	task.spawn(function()
+		local last = os.clock()
+		while true do
+			task.wait(0.1)
+			local current = os.clock()
+			local ok, err = pcall(tick, current - last)
+			last = current
+			if not ok then
+				warn("[PlayerService] tick error:", err)
+			end
+		end
+	end)
+end
+
+return PlayerService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="14">
+        <Properties>
+          <string name="Name">RoundService</string>
+          <string name="Source"><![CDATA[-- The round loop: intermission -> 5 nights (with dawn breaks) -> escape or game over.
+local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Remotes = require(Shared.Remotes)
+
+local DataService = require(script.Parent.DataService)
+local MonsterService = require(script.Parent.MonsterService)
+local PlayerService = require(script.Parent.PlayerService)
+local World = require(script.Parent.World)
+
+local RoundService = {}
+
+local pendingHaunts = {} -- players to sic the monster on when the next night starts
+
+local atmosphere, colorCorrection
+
+local LOOKS = {
+	Day = {
+		Lighting = { ClockTime = 7, Brightness = 1.2, Ambient = Color3.fromRGB(90, 85, 95), OutdoorAmbient = Color3.fromRGB(120, 110, 120) },
+		Atmosphere = { Density = 0.35, Color = Color3.fromRGB(190, 170, 180), Decay = Color3.fromRGB(120, 100, 110), Haze = 1 },
+		Tint = Color3.new(1, 1, 1),
+	},
+	Night = {
+		Lighting = { ClockTime = 0, Brightness = 0.2, Ambient = Color3.fromRGB(20, 20, 30), OutdoorAmbient = Color3.fromRGB(35, 35, 55) },
+		Atmosphere = { Density = 0.55, Color = Color3.fromRGB(50, 55, 80), Decay = Color3.fromRGB(20, 20, 35), Haze = 2.5 },
+		Tint = Color3.fromRGB(220, 225, 255),
+	},
+	BloodMoon = {
+		Lighting = { ClockTime = 0, Brightness = 0.3, Ambient = Color3.fromRGB(40, 10, 10), OutdoorAmbient = Color3.fromRGB(80, 20, 20) },
+		Atmosphere = { Density = 0.55, Color = Color3.fromRGB(120, 30, 30), Decay = Color3.fromRGB(60, 10, 10), Haze = 2.5 },
+		Tint = Color3.fromRGB(255, 190, 190),
+	},
+}
+
+local currentLook
+
+local function setLook(name: string)
+	if currentLook == name then
+		return
+	end
+	currentLook = name
+	local look = LOOKS[name]
+	local info = TweenInfo.new(4, Enum.EasingStyle.Sine)
+	TweenService:Create(Lighting, info, look.Lighting):Play()
+	TweenService:Create(atmosphere, info, look.Atmosphere):Play()
+	TweenService:Create(colorCorrection, info, { TintColor = look.Tint }):Play()
+end
+
+local function now()
+	return workspace:GetServerTimeNow()
+end
+
+local function setPhase(phase: string, duration: number, night: number?)
+	workspace:SetAttribute("Phase", phase)
+	workspace:SetAttribute("PhaseEndsAt", now() + duration)
+	if night then
+		workspace:SetAttribute("Night", night)
+	end
+end
+
+local function loadedPlayers()
+	local list = {}
+	for _, player in Players:GetPlayers() do
+		if player:GetAttribute("Loaded") then
+			table.insert(list, player)
+		end
+	end
+	return list
+end
+
+local function everyoneDown(): boolean
+	local players = loadedPlayers()
+	if #players == 0 then
+		return false
+	end
+	for _, player in players do
+		if PlayerService.IsActive(player) then
+			return false
+		end
+	end
+	return true
+end
+
+function RoundService.QueueHaunt(target: Player)
+	table.insert(pendingHaunts, target)
+end
+
+local function runNight(night: number): string
+	local isBloodMoon = night == Config.BloodMoonNight
+	PlayerService.ResetNight()
+	PlayerService.ReviveAll()
+	setPhase("Night", Config.NightLength[night], night)
+	setLook(if isBloodMoon then "BloodMoon" else "Night")
+	if isBloodMoon then
+		Remotes.announce("🩸 BLOOD MOON! Night " .. night .. ": TWO of them are hunting...", Color3.fromRGB(255, 70, 70))
+	else
+		Remotes.announce(
+			"🌑 Night " .. night .. " of " .. Config.Nights .. ". Stay in the light. Keep the fire burning.",
+			Color3.fromRGB(255, 170, 80)
+		)
+	end
+
+	task.wait(3)
+	MonsterService.Spawn(isBloodMoon, night)
+	if isBloodMoon then
+		MonsterService.Spawn(true, night)
+	end
+	for _, target in pendingHaunts do
+		if target.Parent then
+			MonsterService.ForceTarget(target, Config.HauntDuration)
+			Remotes.Jumpscare:FireClient(target)
+		end
+	end
+	table.clear(pendingHaunts)
+
+	local endsAt = workspace:GetAttribute("PhaseEndsAt")
+	local last = os.clock()
+	local allDownSince = nil
+	while now() < endsAt do
+		task.wait(0.25)
+		local dt = os.clock() - last
+		last = os.clock()
+		if #loadedPlayers() == 0 then
+			return "Empty"
+		end
+		if World.IsDaylight() then
+			setLook("Day")
+		else
+			setLook(if isBloodMoon then "BloodMoon" else "Night")
+			local before = World.Fuel
+			World.AddFuel(-Config.Bonfire.DrainPerSec * dt)
+			if before > 0 and World.Fuel <= 0 then
+				Remotes.announce("🔥 THE BONFIRE WENT OUT! The Hollow is enraged. Bring logs!", Color3.fromRGB(255, 80, 60))
+			end
+		end
+		-- Give downed players a few seconds to use a revive before the night is lost.
+		if everyoneDown() then
+			allDownSince = allDownSince or os.clock()
+			if os.clock() - allDownSince > 8 then
+				return "Lost"
+			end
+		else
+			allDownSince = nil
+		end
+	end
+	return "Survived"
+end
+
+local function rewardNight(night: number)
+	for _, player in loadedPlayers() do
+		if not player:GetAttribute("Dead") then
+			local data = DataService.Get(player)
+			if data then
+				data.NightsSurvived += 1
+				data.BestNight = math.max(data.BestNight, night)
+			end
+			local earned = DataService.AddCandy(player, Config.Rewards.NightSurvived[night], true)
+			Remotes.notify(player, "🌅 You survived night " .. night .. "! +" .. earned .. " 🍬", "success")
+		end
+	end
+end
+
+local function roundLoop()
+	while true do
+		-- Intermission
+		MonsterService.DespawnAll()
+		World.SetFuel(Config.Bonfire.StartFuel)
+		workspace:SetAttribute("Night", 0)
+		setLook("Day")
+		while #loadedPlayers() == 0 do
+			setPhase("Waiting", 0, 0)
+			task.wait(1)
+		end
+		setPhase("Intermission", Config.IntermissionTime, 0)
+		PlayerService.ReviveAll()
+		task.wait(Config.IntermissionTime)
+
+		local result = "Survived"
+		local reached = 0
+		for night = 1, Config.Nights do
+			result = runNight(night)
+			MonsterService.DespawnAll()
+			if result ~= "Survived" then
+				break
+			end
+			reached = night
+			rewardNight(night)
+			if night < Config.Nights then
+				setPhase("Dawn", Config.DawnTime, night)
+				setLook("Day")
+				World.AddFuel(Config.Bonfire.DawnRefuel)
+				PlayerService.ReviveAll()
+				Remotes.announce(
+					"🌅 Dawn. Rest, upgrade your gear, and gather logs. Night " .. (night + 1) .. " is coming.",
+					Color3.fromRGB(255, 220, 150)
+				)
+				task.wait(Config.DawnTime)
+			end
+		end
+
+		if result == "Survived" then
+			setPhase("Victory", Config.EndScreenTime, Config.Nights)
+			setLook("Day")
+			local names = {}
+			for _, player in loadedPlayers() do
+				if not player:GetAttribute("Dead") then
+					table.insert(names, player.DisplayName)
+					local data = DataService.Get(player)
+					if data then
+						data.Escapes += 1
+					end
+					local earned = DataService.AddCandy(player, Config.Rewards.Escape, true)
+					Remotes.notify(player, "🏆 YOU ESCAPED THE HOLLOW! +" .. earned .. " 🍬", "success")
+				end
+			end
+			Remotes.announce("🏆 " .. #names .. " survivor(s) escaped The Hollow!", Color3.fromRGB(255, 215, 80))
+		elseif result == "Lost" then
+			setPhase("GameOver", Config.EndScreenTime, reached)
+			Remotes.announce("💀 The Hollow got everyone on night " .. (reached + 1) .. ". Try again!", Color3.fromRGB(255, 70, 70))
+		end
+		if result ~= "Empty" then
+			task.wait(Config.EndScreenTime)
+		end
+	end
+end
+
+function RoundService.Init()
+	atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
+	atmosphere.Parent = Lighting
+	colorCorrection = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Instance.new("ColorCorrectionEffect")
+	colorCorrection.Saturation = -0.2
+	colorCorrection.Contrast = 0.1
+	colorCorrection.Parent = Lighting
+	Lighting.GlobalShadows = true
+	workspace:SetAttribute("DaylightUntil", 0)
+
+	task.spawn(function()
+		while true do
+			local ok, err = pcall(roundLoop)
+			if not ok then
+				warn("[RoundService] round loop crashed, restarting:", err)
+				task.wait(2)
+			end
+		end
+	end)
+end
+
+return RoundService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
+          <string name="Name">World</string>
+          <string name="Source"><![CDATA[-- Shared world state: the map, the bonfire's fuel and the safe zone around it.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+
+local MapBuilder = require(script.Parent.MapBuilder)
+
+local World = {}
+World.Fuel = Config.Bonfire.StartFuel
+
+function World.Init()
+	local map = MapBuilder.Build()
+	World.Bonfire = map.Bonfire
+	World.Houses = map.Houses
+	World.MapRadius = map.Radius
+	World.SetFuel(Config.Bonfire.StartFuel)
+end
+
+function World.RandomSpot(minRadius: number?): Vector3
+	return MapBuilder.RandomSpot(World.Houses, minRadius)
+end
+
+function World.SafeRadius(): number
+	if World.Fuel <= 0 then
+		return 0
+	end
+	return Config.Bonfire.MinRadius + World.Fuel * Config.Bonfire.RadiusPerFuel
+end
+
+function World.IsSafe(position: Vector3): boolean
+	local flat = Vector3.new(position.X, 0, position.Z)
+	return flat.Magnitude < World.SafeRadius()
+end
+
+function World.IsDaylight(): boolean
+	return workspace:GetServerTimeNow() < (workspace:GetAttribute("DaylightUntil") or 0)
+end
+
+function World.SetFuel(fuel: number)
+	World.Fuel = math.clamp(fuel, 0, Config.Bonfire.MaxFuel)
+	workspace:SetAttribute("BonfireFuel", World.Fuel)
+	workspace:SetAttribute("BonfireMax", Config.Bonfire.MaxFuel)
+
+	local radius = World.SafeRadius()
+	local bonfire = World.Bonfire
+	local lit = World.Fuel > 0
+	bonfire.Fire.Enabled = lit
+	bonfire.Fire.Size = 4 + World.Fuel / Config.Bonfire.MaxFuel * 10
+	bonfire.Light.Enabled = lit
+	bonfire.Light.Range = math.min(60, radius * 1.6 + 6)
+	bonfire.Zone.Transparency = if lit then 0.85 else 1
+	TweenService:Create(bonfire.Zone, TweenInfo.new(0.5), { Size = Vector3.new(0.2, radius * 2, radius * 2) }):Play()
+end
+
+function World.AddFuel(amount: number)
+	World.SetFuel(World.Fuel + amount)
+end
+
+return World
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="16">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="17">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="18">
+        <Properties>
+          <string name="Name">Client</string>
+        </Properties>
+        <Item class="ModuleScript" referent="19">
+          <Properties>
+            <string name="Name">Controls</string>
+            <string name="Source"><![CDATA[-- Sprint (Shift), lantern (F), and aiming the lantern where the camera looks.
+-- ContextActionService also adds on-screen buttons for phones and tablets.
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Remotes = require(Shared.Remotes)
+
+local player = Players.LocalPlayer
+
+local Controls = {}
+Controls.Stamina = Config.Movement.BaseStamina
+Controls.Sprinting = false
+
+local wantSprint = false
+
+function Controls.StaminaMax(): number
+	return Config.Movement.BaseStamina + (player:GetAttribute("Up_Stamina") or 0) * Config.Movement.StaminaPerLevel
+end
+
+function Controls.ToggleLantern()
+	Remotes.ToggleFlashlight:FireServer(not player:GetAttribute("FlashlightOn"))
+end
+
+function Controls.Start()
+	ContextActionService:BindAction("Sprint", function(_, state)
+		if state == Enum.UserInputState.Begin then
+			wantSprint = true
+		elseif state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
+			wantSprint = false
+		end
+		return Enum.ContextActionResult.Sink
+	end, true, Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonL3)
+	ContextActionService:SetTitle("Sprint", "RUN")
+	ContextActionService:SetPosition("Sprint", UDim2.new(1, -170, 1, -150))
+
+	ContextActionService:BindAction("Lantern", function(_, state)
+		if state == Enum.UserInputState.Begin then
+			Controls.ToggleLantern()
+		end
+		return Enum.ContextActionResult.Sink
+	end, true, Enum.KeyCode.F, Enum.KeyCode.ButtonR1)
+	ContextActionService:SetTitle("Lantern", "LIGHT")
+	ContextActionService:SetPosition("Lantern", UDim2.new(1, -170, 1, -90))
+
+	local sendTimer = 0
+	RunService.RenderStepped:Connect(function(dt)
+		local character = player.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if not humanoid or humanoid.Health <= 0 then
+			return
+		end
+
+		local max = Controls.StaminaMax()
+		local moving = humanoid.MoveDirection.Magnitude > 0.1
+		local downed = player:GetAttribute("Downed")
+		Controls.Sprinting = wantSprint and moving and not downed and Controls.Stamina > 0
+		if Controls.Sprinting then
+			Controls.Stamina = math.max(0, Controls.Stamina - dt)
+		else
+			Controls.Stamina = math.min(max, Controls.Stamina + Config.Movement.StaminaRegenPerSec * dt)
+		end
+
+		local speed = if Controls.Sprinting then Config.Movement.SprintSpeed else Config.Movement.WalkSpeed
+		if player:GetAttribute("CarryingLog") then
+			speed *= Config.Movement.CarryMultiplier
+		end
+		if downed then
+			speed = Config.Movement.DownedSpeed
+		end
+		humanoid.WalkSpeed = speed
+
+		-- Point the lantern where the camera looks (smooth locally, synced to the server 10x/second)
+		if player:GetAttribute("FlashlightOn") then
+			local camera = workspace.CurrentCamera
+			local root = character:FindFirstChild("HumanoidRootPart")
+			local attachment = root and root:FindFirstChild("LanternAttachment")
+			if camera and attachment then
+				local direction = camera.CFrame.LookVector
+				local origin = attachment.WorldPosition
+				attachment.WorldCFrame = CFrame.lookAt(origin, origin + direction)
+				sendTimer += dt
+				if sendTimer >= 0.1 then
+					sendTimer = 0
+					Remotes.Aim:FireServer(direction)
+				end
+			end
+		end
+	end)
+end
+
+return Controls
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="20">
+          <Properties>
+            <string name="Name">HUD</string>
+            <string name="Source"><![CDATA[-- All on-screen UI, built from code: night timer, bonfire, battery, stamina, shop, haunt menu,
+-- downed screen, jumpscares, danger vignette and monster radar.
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Format = require(Shared.Format)
+local Remotes = require(Shared.Remotes)
+
+local player = Players.LocalPlayer
+
+local HUD = {}
+
+local SCARY = Enum.Font.Creepster
+local FONT = Enum.Font.FredokaOne
+local COLORS = {
+	panel = Color3.fromRGB(20, 14, 24),
+	panelLight = Color3.fromRGB(38, 28, 44),
+	pumpkin = Color3.fromRGB(255, 130, 30),
+	blood = Color3.fromRGB(200, 30, 40),
+	green = Color3.fromRGB(70, 200, 100),
+	purple = Color3.fromRGB(150, 90, 230),
+	bone = Color3.fromRGB(240, 230, 210),
+	dim = Color3.fromRGB(170, 160, 170),
+}
+local TOAST_COLORS = { success = Color3.fromRGB(40, 140, 70), error = COLORS.blood, info = Color3.fromRGB(80, 60, 120) }
+
+local function new(className: string, props, children)
+	local inst = Instance.new(className)
+	for key, value in props or {} do
+		if key ~= "Parent" then
+			inst[key] = value
+		end
+	end
+	for _, child in children or {} do
+		child.Parent = inst
+	end
+	if props and props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+local function corner(radius: number?)
+	return new("UICorner", { CornerRadius = UDim.new(0, radius or 10) })
+end
+
+local function outline()
+	return new("UIStroke", { Thickness = 2, Color = Color3.new(0, 0, 0), Transparency = 0.1 })
+end
+
+local function border(color: Color3)
+	return new("UIStroke", { Thickness = 2, Color = color, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+end
+
+local function text(props)
+	props.BackgroundTransparency = props.BackgroundTransparency or 1
+	props.Font = props.Font or FONT
+	props.TextColor3 = props.TextColor3 or COLORS.bone
+	props.TextScaled = if props.TextScaled == nil then true else props.TextScaled
+	return new("TextLabel", props, { outline() })
+end
+
+local function button(props, color: Color3)
+	props.BackgroundColor3 = color
+	props.Font = props.Font or FONT
+	props.TextColor3 = COLORS.bone
+	props.TextScaled = true
+	props.AutoButtonColor = true
+	return new("TextButton", props, {
+		corner(8),
+		outline(),
+		new(
+			"UIPadding",
+			{ PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4) }
+		),
+		border(color:Lerp(Color3.new(0, 0, 0), 0.4)),
+	})
+end
+
+local function bar(parent, position: UDim2, size: UDim2, color: Color3, label: string)
+	local frame = new(
+		"Frame",
+		{ Position = position, Size = size, BackgroundColor3 = Color3.fromRGB(15, 10, 15), BackgroundTransparency = 0.2, Parent = parent },
+		{ corner(6), border(Color3.fromRGB(60, 50, 60)) }
+	)
+	local fill = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = color, Parent = frame }, { corner(6) })
+	local caption = text({ Size = UDim2.new(1, -10, 1, -4), Position = UDim2.fromOffset(5, 2), Text = label, ZIndex = 2, Parent = frame })
+	return function(fraction: number, newLabel: string?)
+		fill.Size = UDim2.fromScale(math.clamp(fraction, 0, 1), 1)
+		if newLabel then
+			caption.Text = newLabel
+		end
+	end
+end
+
+local function now()
+	return workspace:GetServerTimeNow()
+end
+
+function HUD.Start(Controls)
+	local gui = new("ScreenGui", {
+		Name = "HollowHUD",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = player:WaitForChild("PlayerGui"),
+	})
+
+	-- Danger vignette (red edges when The Hollow is close)
+	local vignette = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = gui })
+	local edges = {}
+	for _, spec in
+		{
+			{ UDim2.fromScale(1, 0.25), UDim2.fromScale(0, 0), 90 },
+			{ UDim2.fromScale(1, 0.25), UDim2.fromScale(0, 0.75), -90 },
+			{ UDim2.fromScale(0.2, 1), UDim2.fromScale(0, 0), 0 },
+			{ UDim2.fromScale(0.2, 1), UDim2.fromScale(0.8, 0), 180 },
+		}
+	do
+		local edge = new(
+			"Frame",
+			{
+				Size = spec[1],
+				Position = spec[2],
+				BackgroundColor3 = COLORS.blood,
+				BorderSizePixel = 0,
+				BackgroundTransparency = 1,
+				Parent = vignette,
+			},
+			{
+				new("UIGradient", { Rotation = spec[3], Transparency = NumberSequence.new(0, 1) }),
+			}
+		)
+		table.insert(edges, edge)
+	end
+
+	-- Top: phase, timer, bonfire
+	local top = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 44),
+		Size = UDim2.fromOffset(300, 108),
+		BackgroundColor3 = COLORS.panel,
+		BackgroundTransparency = 0.25,
+		Parent = gui,
+	}, { corner(12), border(COLORS.pumpkin) })
+	local phaseLabel = text({
+		Size = UDim2.new(1, -16, 0, 40),
+		Position = UDim2.fromOffset(8, 4),
+		Font = SCARY,
+		Text = "SURVIVE THE HOLLOW",
+		TextColor3 = COLORS.pumpkin,
+		Parent = top,
+	})
+	local timerLabel = text({ Size = UDim2.new(1, -16, 0, 24), Position = UDim2.fromOffset(8, 44), Text = "", Parent = top })
+	local setBonfire = bar(top, UDim2.fromOffset(12, 74), UDim2.new(1, -24, 0, 24), COLORS.pumpkin, "🔥 Bonfire")
+
+	local radarLabel = text({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 158),
+		Size = UDim2.fromOffset(200, 26),
+		Text = "",
+		TextColor3 = Color3.fromRGB(255, 120, 120),
+		Parent = gui,
+	})
+
+	-- Candy
+	local candyLabel = text({
+		Position = UDim2.fromOffset(16, 52),
+		Size = UDim2.fromOffset(200, 34),
+		Text = "🍬 0",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = COLORS.pumpkin,
+		Parent = gui,
+	})
+
+	-- Bottom-left: battery & stamina
+	local meters = new(
+		"Frame",
+		{
+			AnchorPoint = Vector2.new(0, 1),
+			Position = UDim2.new(0, 16, 1, -20),
+			Size = UDim2.fromOffset(240, 64),
+			BackgroundTransparency = 1,
+			Parent = gui,
+		}
+	)
+	local setBattery = bar(meters, UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 28), Color3.fromRGB(240, 220, 120), "🔦 Lantern (F)")
+	local setStamina = bar(meters, UDim2.fromOffset(0, 34), UDim2.new(1, 0, 0, 28), Color3.fromRGB(90, 170, 255), "👟 Stamina (Shift)")
+
+	-- Announcements & toasts
+	local announceLabel = text({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 190),
+		Size = UDim2.new(0.85, 0, 0, 36),
+		Font = SCARY,
+		Text = "",
+		TextTransparency = 1,
+		Parent = gui,
+	})
+	local announceStroke = announceLabel:FindFirstChildOfClass("UIStroke")
+	local announceToken = 0
+	local function announce(message: string, colorHex: string?)
+		announceToken += 1
+		local token = announceToken
+		announceLabel.Text = message
+		announceLabel.TextColor3 = if colorHex then Color3.fromHex(colorHex) else COLORS.bone
+		announceLabel.TextTransparency = 0
+		announceStroke.Transparency = 0.1
+		task.delay(5, function()
+			if token == announceToken then
+				TweenService:Create(announceLabel, TweenInfo.new(1), { TextTransparency = 1 }):Play()
+				TweenService:Create(announceStroke, TweenInfo.new(1), { Transparency = 1 }):Play()
+			end
+		end)
+	end
+
+	local toastHolder = new(
+		"Frame",
+		{
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -100),
+			Size = UDim2.fromOffset(420, 200),
+			BackgroundTransparency = 1,
+			Parent = gui,
+		},
+		{
+			new(
+				"UIListLayout",
+				{
+					VerticalAlignment = Enum.VerticalAlignment.Bottom,
+					HorizontalAlignment = Enum.HorizontalAlignment.Center,
+					Padding = UDim.new(0, 6),
+					SortOrder = Enum.SortOrder.LayoutOrder,
+				}
+			),
+		}
+	)
+	local toastCount = 0
+	local function toast(message: string, kind: string?)
+		toastCount += 1
+		local frame = new(
+			"Frame",
+			{
+				Size = UDim2.new(1, 0, 0, 34),
+				BackgroundColor3 = TOAST_COLORS[kind or "info"] or TOAST_COLORS.info,
+				LayoutOrder = toastCount,
+				Parent = toastHolder,
+			},
+			{ corner(8) }
+		)
+		text({ Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), Text = message, Parent = frame })
+		task.delay(3.5, function()
+			TweenService:Create(frame, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
+			task.wait(0.4)
+			frame:Destroy()
+		end)
+		local extra = #toastHolder:GetChildren() - 5
+		if extra > 0 then
+			for _, child in toastHolder:GetChildren() do
+				if child:IsA("Frame") and extra > 0 then
+					child:Destroy()
+					extra -= 1
+				end
+			end
+		end
+	end
+	Remotes.Notify.OnClientEvent:Connect(toast)
+	Remotes.Announce.OnClientEvent:Connect(announce)
+
+	-- Jumpscare
+	local scare =
+		new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), Visible = false, ZIndex = 50, Parent = gui })
+	local face = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.7, 0.7),
+		BackgroundColor3 = Color3.fromRGB(230, 100, 10),
+		ZIndex = 51,
+		Parent = scare,
+	}, { new("UIAspectRatioConstraint", {}), new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+	for _, x in { 0.3, 0.7 } do
+		new("TextLabel", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(x, 0.38),
+			Size = UDim2.fromScale(0.28, 0.28),
+			BackgroundTransparency = 1,
+			Text = "▲",
+			TextScaled = true,
+			Font = Enum.Font.GothamBlack,
+			TextColor3 = Color3.fromRGB(255, 240, 80),
+			ZIndex = 52,
+			Parent = face,
+		})
+	end
+	new("TextLabel", {
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.7),
+		Size = UDim2.fromScale(0.7, 0.25),
+		BackgroundTransparency = 1,
+		Text = "VVVVVV",
+		TextScaled = true,
+		Font = Enum.Font.GothamBlack,
+		TextColor3 = Color3.fromRGB(255, 240, 80),
+		ZIndex = 52,
+		Parent = face,
+	})
+	local function jumpscare()
+		scare.Visible = true
+		face.Size = UDim2.fromScale(0.4, 0.4)
+		TweenService:Create(face, TweenInfo.new(0.25, Enum.EasingStyle.Back), { Size = UDim2.fromScale(0.95, 0.95) }):Play()
+		local camera = workspace.CurrentCamera
+		local started = os.clock()
+		local connection
+		connection = RunService.RenderStepped:Connect(function()
+			local elapsed = os.clock() - started
+			if elapsed > 0.8 then
+				connection:Disconnect()
+				scare.Visible = false
+				return
+			end
+			scare.BackgroundColor3 = if math.floor(elapsed * 20) % 2 == 0 then Color3.new(0, 0, 0) else COLORS.blood
+			if camera then
+				camera.CFrame *= CFrame.Angles(math.rad(math.random(-3, 3)), math.rad(math.random(-3, 3)), 0)
+			end
+		end)
+	end
+	Remotes.Jumpscare.OnClientEvent:Connect(jumpscare)
+
+	-- Panels
+	local panels = {}
+	local function makePanel(name: string, title: string, size: Vector2)
+		local panel = new("Frame", {
+			Name = name,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.55),
+			Size = UDim2.fromOffset(size.X, size.Y),
+			BackgroundColor3 = COLORS.panel,
+			Visible = false,
+			ZIndex = 10,
+			Parent = gui,
+		}, { corner(14), border(COLORS.pumpkin) })
+		text({
+			Size = UDim2.new(1, -80, 0, 38),
+			Position = UDim2.fromOffset(16, 8),
+			Font = SCARY,
+			Text = title,
+			TextColor3 = COLORS.pumpkin,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = panel,
+		})
+		local close =
+			button({ Size = UDim2.fromOffset(36, 36), Position = UDim2.new(1, -46, 0, 8), Text = "X", Parent = panel }, COLORS.blood)
+		close.Activated:Connect(function()
+			panel.Visible = false
+		end)
+		local scroll = new("ScrollingFrame", {
+			Position = UDim2.fromOffset(12, 54),
+			Size = UDim2.new(1, -24, 1, -66),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			CanvasSize = UDim2.new(),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 6,
+			Parent = panel,
+		}, { new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
+		panels[name] = panel
+		return panel, scroll
+	end
+	local function togglePanel(name: string)
+		for key, panel in panels do
+			panel.Visible = key == name and not panel.Visible
+		end
+	end
+
+	local function row(scroll, order: number, title: string, description: string)
+		local frame = new(
+			"Frame",
+			{ Size = UDim2.new(1, -10, 0, 66), BackgroundColor3 = COLORS.panelLight, LayoutOrder = order, Parent = scroll },
+			{ corner(8) }
+		)
+		text({
+			Size = UDim2.new(1, -140, 0, 26),
+			Position = UDim2.fromOffset(10, 6),
+			Text = title,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = frame,
+		})
+		local desc = text({
+			Size = UDim2.new(1, -140, 0, 28),
+			Position = UDim2.fromOffset(10, 32),
+			Text = description,
+			TextColor3 = COLORS.dim,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextWrapped = true,
+			Parent = frame,
+		})
+		local buy = button(
+			{
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -10, 0.5, 0),
+				Size = UDim2.fromOffset(110, 42),
+				Text = "",
+				Parent = frame,
+			},
+			COLORS.green
+		)
+		return buy, desc
+	end
+	local function header(scroll, order: number, title: string)
+		text({
+			Size = UDim2.new(1, -10, 0, 26),
+			Text = title,
+			TextColor3 = COLORS.pumpkin,
+			LayoutOrder = order,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = scroll,
+		})
+	end
+
+	local function promptPurchase(item, isPass: boolean)
+		if item.Id == 0 then
+			toast("This item isn't set up yet (Id = 0 in Config).", "error")
+			return
+		end
+		if isPass then
+			MarketplaceService:PromptGamePassPurchase(player, item.Id)
+		else
+			MarketplaceService:PromptProductPurchase(player, item.Id)
+		end
+	end
+
+	-- Shop
+	local _, shopScroll = makePanel("Shop", "SHOP", Vector2.new(480, 460))
+	local order = 0
+	order += 1
+	header(shopScroll, order, "🍬 UPGRADES (candy)")
+	for _, key in Config.UpgradeOrder do
+		local upgrade = Config.Upgrades[key]
+		order += 1
+		local buy, desc = row(shopScroll, order, upgrade.Name, upgrade.Description)
+		buy.BackgroundColor3 = COLORS.pumpkin
+		local function refresh()
+			local level = player:GetAttribute("Up_" .. key) or 0
+			local cost = upgrade.Costs[level + 1]
+			desc.Text = upgrade.Description .. "  (Lv " .. level .. "/" .. #upgrade.Costs .. ")"
+			buy.Text = if cost then "🍬 " .. Format.Abbrev(cost) else "MAX"
+		end
+		player:GetAttributeChangedSignal("Up_" .. key):Connect(refresh)
+		refresh()
+		buy.Activated:Connect(function()
+			local ok, success, message = pcall(Remotes.BuyUpgrade.InvokeServer, Remotes.BuyUpgrade, key)
+			if ok then
+				toast(message, if success then "success" else "error")
+			end
+		end)
+	end
+	order += 1
+	header(shopScroll, order, "⭐ GAME PASSES (forever)")
+	for _, key in Config.PassOrder do
+		local pass = Config.GamePasses[key]
+		order += 1
+		local buy = row(shopScroll, order, pass.Name, pass.Description)
+		local function refresh()
+			if player:GetAttribute("Pass_" .. key) then
+				buy.Text = "OWNED"
+				buy.BackgroundColor3 = Color3.fromRGB(70, 65, 75)
+			else
+				buy.Text = "R$ " .. pass.Price
+			end
+		end
+		player:GetAttributeChangedSignal("Pass_" .. key):Connect(refresh)
+		refresh()
+		buy.Activated:Connect(function()
+			if not player:GetAttribute("Pass_" .. key) then
+				promptPurchase(pass, true)
+			end
+		end)
+	end
+	order += 1
+	header(shopScroll, order, "⚡ BOOSTS")
+	for _, key in Config.ProductOrder do
+		if key ~= "HauntPlayer" then
+			local product = Config.Products[key]
+			order += 1
+			local buy = row(shopScroll, order, product.Name, product.Description)
+			buy.Text = "R$ " .. product.Price
+			buy.Activated:Connect(function()
+				promptPurchase(product, false)
+			end)
+		end
+	end
+
+	-- Haunt menu
+	local hauntPanel, hauntScroll = makePanel("Haunt", "HAUNT A PLAYER", Vector2.new(400, 400))
+	local function refreshHaunt()
+		for _, child in hauntScroll:GetChildren() do
+			if child:IsA("Frame") or child:IsA("TextLabel") then
+				child:Destroy()
+			end
+		end
+		header(
+			hauntScroll,
+			0,
+			"Pick who The Hollow chases for " .. Config.HauntDuration .. "s (R$ " .. Config.Products.HauntPlayer.Price .. ")"
+		)
+		local count = 0
+		for _, other in Players:GetPlayers() do
+			if other ~= player then
+				count += 1
+				local buy = row(hauntScroll, count, "👻 " .. other.DisplayName, "@" .. other.Name)
+				buy.Text = "HAUNT"
+				buy.BackgroundColor3 = COLORS.purple
+				buy.Activated:Connect(function()
+					Remotes.SetHauntTarget:FireServer(other.UserId)
+					promptPurchase(Config.Products.HauntPlayer, false)
+				end)
+			end
+		end
+		if count == 0 then
+			text({
+				Size = UDim2.new(1, -10, 0, 40),
+				Text = "Nobody else is here yet. Invite a friend!",
+				LayoutOrder = 1,
+				Parent = hauntScroll,
+			})
+		end
+	end
+
+	-- Side buttons
+	local side = new("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 12, 0.5, 0),
+		Size = UDim2.fromOffset(140, 180),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
+	local shopButton = button({ Size = UDim2.fromOffset(140, 50), Text = "🛒 SHOP", LayoutOrder = 1, Parent = side }, COLORS.pumpkin)
+	local hauntButton = button({ Size = UDim2.fromOffset(140, 50), Text = "👻 HAUNT", LayoutOrder = 2, Parent = side }, COLORS.purple)
+	local lanternButton =
+		button({ Size = UDim2.fromOffset(140, 50), Text = "🔦 LANTERN", LayoutOrder = 3, Parent = side }, Color3.fromRGB(150, 130, 60))
+	shopButton.Activated:Connect(function()
+		togglePanel("Shop")
+	end)
+	hauntButton.Activated:Connect(function()
+		refreshHaunt()
+		togglePanel("Haunt")
+	end)
+	lanternButton.Activated:Connect(Controls.ToggleLantern)
+
+	-- Downed / dead screen
+	local downed = new(
+		"Frame",
+		{
+			Size = UDim2.fromScale(1, 1),
+			BackgroundColor3 = Color3.fromRGB(80, 0, 0),
+			BackgroundTransparency = 0.55,
+			Visible = false,
+			ZIndex = 20,
+			Parent = gui,
+		}
+	)
+	local downedTitle = text({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.fromScale(0.5, 0.22),
+		Size = UDim2.fromOffset(600, 70),
+		Font = SCARY,
+		Text = "YOU'RE DOWN",
+		TextColor3 = Color3.fromRGB(255, 80, 80),
+		ZIndex = 21,
+		Parent = downed,
+	})
+	local downedSub = text({
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0.22, 74),
+		Size = UDim2.fromOffset(600, 30),
+		Text = "",
+		ZIndex = 21,
+		Parent = downed,
+	})
+	local reviveRow = new(
+		"Frame",
+		{
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0.22, 120),
+			Size = UDim2.fromOffset(620, 54),
+			BackgroundTransparency = 1,
+			ZIndex = 21,
+			Parent = downed,
+		},
+		{
+			new(
+				"UIListLayout",
+				{
+					FillDirection = Enum.FillDirection.Horizontal,
+					HorizontalAlignment = Enum.HorizontalAlignment.Center,
+					Padding = UDim.new(0, 10),
+				}
+			),
+		}
+	)
+	local secondWindButton = button(
+		{ Size = UDim2.fromOffset(190, 52), Text = "💖 SECOND WIND", ZIndex = 22, Parent = reviveRow },
+		Color3.fromRGB(200, 60, 120)
+	)
+	local tokenButton =
+		button({ Size = UDim2.fromOffset(190, 52), Text = "💖 USE TOKEN", ZIndex = 22, Parent = reviveRow }, Color3.fromRGB(200, 60, 120))
+	local buyReviveButton = button(
+		{ Size = UDim2.fromOffset(190, 52), Text = "💖 REVIVE  R$ " .. Config.Products.SelfRevive.Price, ZIndex = 22, Parent = reviveRow },
+		COLORS.green
+	)
+	local function useRevive(kind: string)
+		local ok, success, message = pcall(Remotes.UseRevive.InvokeServer, Remotes.UseRevive, kind)
+		if ok then
+			toast(message, if success then "success" else "error")
+		end
+	end
+	secondWindButton.Activated:Connect(function()
+		useRevive("SecondWind")
+	end)
+	tokenButton.Activated:Connect(function()
+		useRevive("Token")
+	end)
+	buyReviveButton.Activated:Connect(function()
+		promptPurchase(Config.Products.SelfRevive, false)
+	end)
+
+	-- End-of-round banner
+	local endBanner = text({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.42),
+		Size = UDim2.fromOffset(700, 90),
+		Font = SCARY,
+		Text = "",
+		Visible = false,
+		Parent = gui,
+	})
+
+	-- Live updates
+	local elapsed = 0
+	RunService.Heartbeat:Connect(function(dt)
+		local t = now()
+
+		-- Danger vignette and radar every frame for smooth pulsing
+		local character = player.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		local nearest, nearestDistance = nil, math.huge
+		if root then
+			for _, monster in workspace:WaitForChild("Monsters"):GetChildren() do
+				local pivot = monster:GetPivot().Position
+				local distance = (pivot - root.Position).Magnitude
+				if distance < nearestDistance then
+					nearest, nearestDistance = pivot, distance
+				end
+			end
+		end
+		local danger = if nearest then math.clamp(1 - nearestDistance / 45, 0, 1) else 0
+		local pulse = 0.75 + 0.25 * math.sin(os.clock() * (4 + danger * 8))
+		for _, edge in edges do
+			edge.BackgroundTransparency = 1 - danger * 0.75 * pulse
+		end
+		if nearest and player:GetAttribute("Pass_MonsterRadar") then
+			local camera = workspace.CurrentCamera
+			local flatLook = Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
+			local toMonster = Vector3.new(nearest.X - root.Position.X, 0, nearest.Z - root.Position.Z)
+			local arrow = "⬆"
+			if flatLook.Magnitude > 0.01 and toMonster.Magnitude > 0.01 then
+				local angle = math.deg(math.atan2(flatLook:Cross(toMonster).Y, flatLook:Dot(toMonster)))
+				local arrows = { "⬆", "↗", "➡", "↘", "⬇", "↙", "⬅", "↖" }
+				arrow = arrows[(math.floor((-angle + 22.5) / 45) % 8) + 1]
+			end
+			radarLabel.Text = "📡 👹 " .. arrow .. " " .. math.floor(nearestDistance) .. "m"
+		else
+			radarLabel.Text = ""
+		end
+
+		elapsed += dt
+		if elapsed < 0.1 then
+			return
+		end
+		elapsed = 0
+
+		local phase = workspace:GetAttribute("Phase") or "Waiting"
+		local night = workspace:GetAttribute("Night") or 0
+		local remaining = Format.Time((workspace:GetAttribute("PhaseEndsAt") or t) - t)
+		local daylight = t < (workspace:GetAttribute("DaylightUntil") or 0)
+		if phase == "Night" then
+			phaseLabel.Text = if night == Config.BloodMoonNight then "BLOOD MOON" else "NIGHT " .. night .. " / " .. Config.Nights
+			phaseLabel.TextColor3 = if night == Config.BloodMoonNight then Color3.fromRGB(255, 60, 60) else COLORS.pumpkin
+			timerLabel.Text = if daylight
+				then "☀️ Daylight! " .. Format.Time(workspace:GetAttribute("DaylightUntil") - t)
+				else "Survive until dawn: " .. remaining
+		elseif phase == "Dawn" then
+			phaseLabel.Text = "DAWN"
+			phaseLabel.TextColor3 = Color3.fromRGB(255, 210, 140)
+			timerLabel.Text = "Night " .. (night + 1) .. " in " .. remaining
+		elseif phase == "Intermission" then
+			phaseLabel.Text = "SURVIVE THE HOLLOW"
+			phaseLabel.TextColor3 = COLORS.pumpkin
+			timerLabel.Text = "Night falls in " .. remaining
+		elseif phase == "Victory" or phase == "GameOver" then
+			phaseLabel.Text = if phase == "Victory" then "YOU ESCAPED" else "GAME OVER"
+			timerLabel.Text = "New game in " .. remaining
+		else
+			phaseLabel.Text = "SURVIVE THE HOLLOW"
+			timerLabel.Text = "Waiting for players..."
+		end
+		endBanner.Visible = phase == "Victory" or phase == "GameOver"
+		endBanner.Text = if phase == "Victory" then "🏆 YOU SURVIVED 5 NIGHTS 🏆" else "💀 THE HOLLOW WINS 💀"
+		endBanner.TextColor3 = if phase == "Victory" then Color3.fromRGB(255, 215, 80) else Color3.fromRGB(255, 60, 60)
+
+		local fuel = workspace:GetAttribute("BonfireFuel") or 0
+		local maxFuel = workspace:GetAttribute("BonfireMax") or 1
+		setBonfire(fuel / maxFuel, if fuel <= 0 then "🔥 FIRE IS OUT! BRING LOGS" else "🔥 Bonfire " .. math.floor(fuel) .. "s")
+
+		candyLabel.Text = "🍬 " .. Format.Abbrev(player:GetAttribute("Candy") or 0)
+
+		local battery = player:GetAttribute("Battery") or 0
+		local batteryMax = player:GetAttribute("BatteryMax") or 1
+		if player:GetAttribute("Pass_InfiniteBattery") then
+			setBattery(1, "🔦 Lantern ∞ (F)")
+		else
+			setBattery(battery / batteryMax, "🔦 Lantern " .. math.floor(battery) .. "s (F)")
+		end
+		lanternButton.Text = if player:GetAttribute("FlashlightOn") then "🔦 LIGHT ON" else "🔦 LIGHT OFF"
+		setStamina(Controls.Stamina / Controls.StaminaMax(), if Controls.Sprinting then "👟 RUNNING" else "👟 Stamina (Shift)")
+
+		local isDowned = player:GetAttribute("Downed")
+		local isDead = player:GetAttribute("Dead")
+		downed.Visible = (isDowned or isDead) and phase == "Night"
+		if downed.Visible then
+			if isDowned then
+				downedTitle.Text = "YOU'RE DOWN"
+				downedSub.Text = "A teammate can revive you. Bleeding out in " .. Format.Time((player:GetAttribute("DownedUntil") or t) - t)
+			else
+				downedTitle.Text = "YOU DIED"
+				downedSub.Text = "You'll be back at dawn... or get back in now."
+			end
+			secondWindButton.Visible = player:GetAttribute("Pass_SecondWind") == true
+			local tokens = player:GetAttribute("ReviveTokens") or 0
+			tokenButton.Visible = tokens > 0
+			tokenButton.Text = "💖 USE TOKEN (" .. tokens .. ")"
+		end
+	end)
+
+	Players.PlayerAdded:Connect(function()
+		if hauntPanel.Visible then
+			refreshHaunt()
+		end
+	end)
+	Players.PlayerRemoving:Connect(function()
+		if hauntPanel.Visible then
+			task.defer(refreshHaunt)
+		end
+	end)
+end
+
+return HUD
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="LocalScript" referent="21">
+          <Properties>
+            <string name="Name">Main</string>
+            <string name="Source"><![CDATA[-- Client entry point: controls, UI, revive prompt visibility and VIP chat tags.
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+
+local Controls = require(script.Parent.Controls)
+local HUD = require(script.Parent.HUD)
+
+local player = Players.LocalPlayer
+
+Controls.Start()
+HUD.Start(Controls)
+
+-- You can't revive yourself: hide your own revive prompt.
+local function setupPrompt(prompt: ProximityPrompt)
+	if prompt:GetAttribute("OwnerId") == player.UserId then
+		prompt.MaxActivationDistance = 0
+	end
+end
+CollectionService:GetInstanceAddedSignal("RevivePrompt"):Connect(setupPrompt)
+for _, prompt in CollectionService:GetTagged("RevivePrompt") do
+	setupPrompt(prompt)
+end
+
+-- [VIP] chat tag
+TextChatService.OnIncomingMessage = function(message: TextChatMessage)
+	local properties = Instance.new("TextChatMessageProperties")
+	local source = message.TextSource
+	local speaker = source and Players:GetPlayerByUserId(source.UserId)
+	if speaker and speaker:GetAttribute("Pass_VIP") then
+		properties.PrefixText = "<font color='#FFB43C'>[VIP]</font> " .. message.PrefixText
+	end
+	return properties
+end
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+</roblox>
