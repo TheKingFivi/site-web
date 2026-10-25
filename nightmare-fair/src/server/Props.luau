@@ -81,7 +81,7 @@ function Props.Billboard(part: BasePart, text: string, color: Color3, height: nu
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.FredokaOne
+	label.Font = Enum.Font.Oswald
 	label.TextScaled = true
 	label.TextColor3 = color
 	label.Text = text
@@ -442,16 +442,13 @@ end
 
 function Props.TicketBooth(cf: CFrame, parent)
 	local model = Props.Model("TicketBooth", parent)
-	P(
-		{
-			Name = "Body",
-			Size = Vector3.new(7, 8, 7),
-			CFrame = cf * CFrame.new(0, 4, 0),
-			Color = C.red,
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
+	P({
+		Name = "Body",
+		Size = Vector3.new(7, 8, 7),
+		CFrame = cf * CFrame.new(0, 4, 0),
+		Color = C.red,
+		Material = Enum.Material.WoodPlanks,
+	}, model)
 	P({
 		Name = "Window",
 		Size = Vector3.new(4, 3, 0.2),
@@ -1091,15 +1088,7 @@ end
 
 function Props.Lake(cf: CFrame, parent, size: Vector2)
 	local model = Props.Model("Lake", parent)
-	P({
-		Name = "Water",
-		Size = Vector3.new(size.X, 1, size.Y),
-		CFrame = cf * CFrame.new(0, -0.3, 0),
-		Color = rgb(25, 45, 55),
-		Material = Enum.Material.Glass,
-		Transparency = 0.15,
-		Reflectance = 0.2,
-	}, model)
+	-- The water itself is real Terrain water (made in MapBuilder); this adds the dock, boat and shore rocks.
 	-- Water is impassable: invisible wall around the edge keeps players on land
 	P({ Name = "Blocker", Size = Vector3.new(size.X - 4, 14, size.Y - 4), CFrame = cf * CFrame.new(0, 7, 0), Transparency = 1 }, model)
 	-- Dock
@@ -1292,16 +1281,13 @@ end
 function Props.LWall(cf: CFrame, parent)
 	local model = Props.Model("LWall", parent)
 	local color = rgb(95, 90, 95)
-	P(
-		{
-			Name = "Wall",
-			Size = Vector3.new(16, 9, 1.4),
-			CFrame = cf * CFrame.new(0, 4.5, 0),
-			Color = color,
-			Material = Enum.Material.Brick,
-		},
-		model
-	)
+	P({
+		Name = "Wall",
+		Size = Vector3.new(16, 9, 1.4),
+		CFrame = cf * CFrame.new(0, 4.5, 0),
+		Color = color,
+		Material = Enum.Material.Brick,
+	}, model)
 	P({
 		Name = "Wall",
 		Size = Vector3.new(1.4, 9, 12),
@@ -1359,6 +1345,54 @@ function Props.FortuneTent(cf: CFrame, parent)
 	}, model)
 	Props.Light(ball, rgb(150, 220, 255), 14, 1.2)
 	return model
+end
+
+function Props.TireStack(cf: CFrame, parent)
+	local model = Props.Model("TireStack", parent)
+	for i = 0, rng:NextInteger(2, 4) do
+		P({
+			Name = "Tire",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1.1, 3.2, 3.2),
+			CFrame = cf
+				* CFrame.new(rng:NextNumber(-0.3, 0.3), 0.55 + i * 1.1, rng:NextNumber(-0.3, 0.3))
+				* CFrame.Angles(0, 0, math.rad(90)),
+			Color = rgb(22, 22, 24),
+			Material = Enum.Material.Rubber,
+		}, model)
+	end
+	return model
+end
+
+-- A short wooden farm fence between two points
+function Props.LowFence(a: Vector3, b: Vector3, parent)
+	local length = (b - a).Magnitude
+	local cf = CFrame.lookAt((a + b) / 2, b)
+	for _, y in { 1.2, 2.6 } do
+		P(
+			{
+				Name = "Rail",
+				Size = Vector3.new(0.3, 0.4, length),
+				CFrame = cf + Vector3.new(0, y, 0),
+				Color = rgb(92, 70, 48),
+				Material = Enum.Material.Wood,
+			},
+			parent
+		)
+	end
+	for i = 0, math.floor(length / 6) do
+		local pos = a:Lerp(b, math.min(1, i * 6 / length))
+		P(
+			{
+				Name = "Post",
+				Size = Vector3.new(0.5, 3.4, 0.5),
+				Position = pos + Vector3.new(0, 1.7, 0),
+				Color = rgb(70, 52, 36),
+				Material = Enum.Material.Wood,
+			},
+			parent
+		)
+	end
 end
 
 -- Gameplay objects --------------------------------------------------------

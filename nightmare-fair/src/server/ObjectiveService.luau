@@ -49,6 +49,7 @@ end
 
 local function powerGates()
 	workspace:SetAttribute("GatesPowered", true)
+	Remotes.Sfx:FireAllClients("GateAlarm")
 	workspace:SetAttribute("CollapseEndsAt", now() + Config.EndGameCollapse)
 	for _, gate in Match.Map.Gates do
 		gate.Lamp.Color = Color3.fromRGB(255, 200, 40)
@@ -67,6 +68,7 @@ end
 local function lightPumpkin(pumpkin, workers)
 	pumpkin.Lit = true
 	pumpkin.Progress = 1
+	Remotes.Sfx:FireAllClients("PumpkinLit", pumpkin.Position)
 	pumpkin.Prompt.Enabled = false
 	setPumpkinVisual(pumpkin)
 	for _, worker in workers do
@@ -182,7 +184,7 @@ local function setupPumpkins()
 		local label = Instance.new("TextLabel")
 		label.Size = UDim2.fromScale(1, 1)
 		label.BackgroundTransparency = 1
-		label.Font = Enum.Font.FredokaOne
+		label.Font = Enum.Font.Oswald
 		label.TextScaled = true
 		label.TextColor3 = Color3.fromRGB(255, 190, 90)
 		label.Text = "🎃 0%"

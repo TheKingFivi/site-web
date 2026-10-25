@@ -121,6 +121,10 @@ end
 function SurvivorService.Hit(player: Player): string?
 	local health = Match.Health(player)
 	player:SetAttribute("WorkingOn", nil)
+	local hitRoot = Match.Root(player)
+	if hitRoot and (health == "Healthy" or health == "Injured") then
+		Remotes.Sfx:FireAllClients("Hit", hitRoot.Position)
+	end
 	if health == "Healthy" then
 		SurvivorService.SetHealth(player, "Injured")
 		-- Burst of speed so the survivor can get away
@@ -332,6 +336,7 @@ function SurvivorService.CageSurvivor(killer: Player, cage)
 	caged[survivor] = cage
 	root.CFrame = cage.Inside
 	root.Anchored = true
+	Remotes.Sfx:FireAllClients("CageScream", cage.Position)
 	SurvivorService.SetHealth(survivor, "Caged")
 	cage.Light.Color = Color3.fromRGB(255, 200, 60)
 

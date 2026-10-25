@@ -128,17 +128,12 @@ local HATS = {
 				CFrame.new(0.05 * i, 0.6 + i * 0.5, 0.05 * i) * CFrame.Angles(0, 0, math.rad(90))
 			)
 		end
-		attach(
-			f,
-			head,
-			{
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(0.2, 1.45, 1.45),
-				Color = rgb(150, 255, 90),
-				Material = Enum.Material.Neon,
-			},
-			CFrame.new(0, 0.9, 0) * CFrame.Angles(0, 0, math.rad(90))
-		)
+		attach(f, head, {
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.2, 1.45, 1.45),
+			Color = rgb(150, 255, 90),
+			Material = Enum.Material.Neon,
+		}, CFrame.new(0, 0.9, 0) * CFrame.Angles(0, 0, math.rad(90)))
 	end,
 	SkullMask = function(f, head)
 		local mask = attach(
@@ -188,17 +183,12 @@ local HATS = {
 		end
 	end,
 	Halo = function(f, head)
-		local ring = attach(
-			f,
-			head,
-			{
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(0.15, 1.6, 1.6),
-				Color = rgb(255, 240, 150),
-				Material = Enum.Material.Neon,
-			},
-			CFrame.new(0, 1.4, 0) * CFrame.Angles(0, 0, math.rad(90))
-		)
+		local ring = attach(f, head, {
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.15, 1.6, 1.6),
+			Color = rgb(255, 240, 150),
+			Material = Enum.Material.Neon,
+		}, CFrame.new(0, 1.4, 0) * CFrame.Angles(0, 0, math.rad(90)))
 		glow(ring, rgb(255, 240, 160), 10)
 	end,
 	Crown = function(f, head)

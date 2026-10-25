@@ -184,4 +184,69 @@ Config.ProductOrder = { "KillerChance", "SelfRescue", "TicketsSmall", "TicketsLa
 Config.TicketPacks = { TicketsSmall = 500, TicketsLarge = 3000, TicketsHuge = 12000 }
 Config.KillerChancePack = 5
 
+-- Music & sound effects. The files are in the audio/ folder of the project:
+-- upload each one in the Creator Hub (Development Items -> Audio), then paste its ID here.
+Config.Sounds = {
+	LobbyMusic = { Id = 0, Volume = 0.45, File = "lobby_music.ogg" },
+	Ambience = { Id = 0, Volume = 0.5, File = "ambience.ogg" },
+	TerrorRadius = { Id = 0, Volume = 0.9, File = "terror_heartbeat.ogg" },
+	ChaseMusic = { Id = 0, Volume = 0.7, File = "chase_music.ogg" },
+	SkillCheck = { Id = 0, Volume = 0.6, File = "sfx_skillcheck.ogg" },
+	Great = { Id = 0, Volume = 0.6, File = "sfx_great.ogg" },
+	PumpkinLit = { Id = 0, Volume = 0.7, File = "sfx_pumpkin_lit.ogg" },
+	Hit = { Id = 0, Volume = 0.9, File = "sfx_hit.ogg" },
+	Pallet = { Id = 0, Volume = 1, File = "sfx_pallet.ogg" },
+	CageScream = { Id = 0, Volume = 0.9, File = "sfx_cage_scream.ogg" },
+	GateAlarm = { Id = 0, Volume = 0.6, File = "sfx_gate_alarm.ogg" },
+}
+Config.TerrorRadius = 45 -- studs: the heartbeat starts here
+Config.ChaseRadius = 22 -- studs: chase music kicks in here
+
+-- Real 3D looks for the killers from the Roblox Marketplace (roblox.com/catalog).
+-- Open an item, copy the number from its web address, and paste it below.
+-- Several accessories in one slot: separate with commas, e.g. "123,456".
+-- Leave everything empty to keep the built-in costume.
+-- Animations: Marketplace animation items (e.g. a zombie run) for player killers; the AI uses Roblox's defaults.
+Config.KillerLooks = {
+	Ringmaster = {
+		Hat = "",
+		Face = "",
+		Back = "",
+		Front = "",
+		Neck = "",
+		Shoulder = "",
+		Waist = "",
+		Shirt = 0,
+		Pants = 0,
+		FaceDecal = 0,
+		Animations = { Run = 0, Walk = 0, Idle = 0 },
+	},
+	Butcher = {
+		Hat = "",
+		Face = "",
+		Back = "",
+		Front = "",
+		Neck = "",
+		Shoulder = "",
+		Waist = "",
+		Shirt = 0,
+		Pants = 0,
+		FaceDecal = 0,
+		Animations = { Run = 0, Walk = 0, Idle = 0 },
+	},
+	Phantom = {
+		Hat = "",
+		Face = "",
+		Back = "",
+		Front = "",
+		Neck = "",
+		Shoulder = "",
+		Waist = "",
+		Shirt = 0,
+		Pants = 0,
+		FaceDecal = 0,
+		Animations = { Run = 0, Walk = 0, Idle = 0 },
+	},
+}
+
 return Config

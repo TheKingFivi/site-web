@@ -2,13 +2,15 @@
 local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 
+local Audio = require(script.Parent.Audio)
 local Controls = require(script.Parent.Controls)
 local Effects = require(script.Parent.Effects)
 local HUD = require(script.Parent.HUD)
 
+Audio.Start()
 Effects.Start()
 Controls.Start()
-HUD.Start()
+HUD.Start(Audio)
 
 -- Rainbow trail cosmetic
 RunService.RenderStepped:Connect(function()

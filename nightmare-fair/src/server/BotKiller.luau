@@ -11,6 +11,7 @@ local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 
 local DataService = require(script.Parent.DataService)
+local KillerLook = require(script.Parent.KillerLook)
 local KillerService = require(script.Parent.KillerService)
 local Match = require(script.Parent.Match)
 local SurvivorService = require(script.Parent.SurvivorService)
@@ -40,6 +41,7 @@ local function buildBody(spawnCFrame: CFrame)
 	description.RightArmColor = Color3.fromRGB(30, 10, 18)
 	description.LeftLegColor = Color3.fromRGB(20, 15, 20)
 	description.RightLegColor = Color3.fromRGB(20, 15, 20)
+	KillerLook.Fill(description, "Ringmaster")
 	local model = Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
 	model.Name = "The Ringmaster"
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
@@ -52,8 +54,26 @@ local function buildBody(spawnCFrame: CFrame)
 	local root = model:FindFirstChild("HumanoidRootPart")
 	root:SetNetworkOwner(nil) -- the server drives it
 	KillerService.Dress(model, "Ringmaster")
+	if KillerLook.Has("Ringmaster") then
+		KillerService.StripMask(model)
+	end
 	CollectionService:AddTag(model, "KillerBot")
-	return model, humanoid, root
+
+	-- Walk / run / idle animations (Roblox defaults), switched by speed in think()
+	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator")
+	animator.Parent = humanoid
+	local tracks = {}
+	for name, id in KillerLook.AnimationsForBot() do
+		local animation = Instance.new("Animation")
+		animation.AnimationId = "rbxassetid://" .. id
+		local ok, track = pcall(animator.LoadAnimation, animator, animation)
+		if ok then
+			track.Looped = true
+			track.Priority = Enum.AnimationPriority.Movement
+			tracks[name] = track
+		end
+	end
+	return model, humanoid, root, tracks
 end
 
 local function canSee(from: Vector3, to: Vector3, ignore)
@@ -172,6 +192,18 @@ local function think()
 	local t = now()
 	local humanoid = bot.Humanoid
 
+	-- Animate: idle when standing, walk when slow, run when fast
+	local velocity = bot.Root.AssemblyLinearVelocity
+	local speed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+	local wanted = if speed < 1 then "Idle" elseif speed < 12 then "Walk" else "Run"
+	if wanted ~= bot.Playing and bot.Tracks[wanted] then
+		if bot.Playing and bot.Tracks[bot.Playing] then
+			bot.Tracks[bot.Playing]:Stop(0.2)
+		end
+		bot.Tracks[wanted]:Play(0.2)
+		bot.Playing = wanted
+	end
+
 	if t < bot.FrozenUntil or t < bot.StunnedUntil then
 		humanoid.WalkSpeed = 0
 		humanoid:MoveTo(bot.Root.Position)
@@ -249,8 +281,10 @@ end
 
 function BotKiller.Start()
 	BotKiller.Stop()
-	local model, humanoid, root = buildBody(Match.Map.KillerSpawn)
+	local model, humanoid, root, tracks = buildBody(Match.Map.KillerSpawn)
 	bot = {
+		Tracks = tracks,
+		Playing = nil,
 		Model = model,
 		Humanoid = humanoid,
 		Root = root,

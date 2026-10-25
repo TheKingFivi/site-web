@@ -19,20 +19,20 @@ local player = Players.LocalPlayer
 
 local HUD = {}
 
-local SCARY = Enum.Font.Creepster
-local FONT = Enum.Font.FredokaOne
+local SCARY = Enum.Font.SpecialElite
+local FONT = Enum.Font.Oswald
 local C = {
-	panel = Color3.fromRGB(22, 14, 26),
-	panel2 = Color3.fromRGB(40, 26, 46),
-	red = Color3.fromRGB(200, 35, 50),
-	gold = Color3.fromRGB(255, 195, 70),
-	green = Color3.fromRGB(60, 190, 95),
-	purple = Color3.fromRGB(130, 70, 200),
-	bone = Color3.fromRGB(240, 232, 220),
-	dim = Color3.fromRGB(170, 158, 170),
-	grey = Color3.fromRGB(80, 72, 84),
+	panel = Color3.fromRGB(12, 11, 13),
+	panel2 = Color3.fromRGB(26, 24, 28),
+	red = Color3.fromRGB(150, 22, 30),
+	gold = Color3.fromRGB(176, 140, 82),
+	green = Color3.fromRGB(58, 64, 60),
+	purple = Color3.fromRGB(70, 52, 78),
+	bone = Color3.fromRGB(226, 220, 208),
+	dim = Color3.fromRGB(150, 144, 140),
+	grey = Color3.fromRGB(46, 44, 48),
 }
-local TOAST = { success = Color3.fromRGB(40, 130, 70), error = C.red, info = Color3.fromRGB(80, 55, 120) }
+local TOAST = { success = Color3.fromRGB(34, 48, 38), error = Color3.fromRGB(70, 16, 20), info = Color3.fromRGB(30, 28, 34) }
 local HEALTH_ICON = { Healthy = "❤️", Injured = "🩸", Downed = "🆘", Carried = "😱", Caged = "🐦‍⬛" }
 
 local function new(className: string, props, children)
@@ -51,7 +51,7 @@ local function new(className: string, props, children)
 	return inst
 end
 local function corner(r: number?)
-	return new("UICorner", { CornerRadius = UDim.new(0, r or 10) })
+	return new("UICorner", { CornerRadius = UDim.new(0, math.min(r or 3, 3)) }) -- sharp, DBD-like
 end
 local function outline()
 	return new("UIStroke", { Thickness = 2, Color = Color3.new(0, 0, 0), Transparency = 0.1 })
@@ -93,7 +93,7 @@ local function invoke(remote: RemoteFunction, ...)
 	return success, message, extra
 end
 
-function HUD.Start()
+function HUD.Start(Audio)
 	local gui = new("ScreenGui", {
 		Name = "FairHUD",
 		ResetOnSpawn = false,
@@ -316,9 +316,10 @@ function HUD.Start()
 		ContextActionService:UnbindAction("SkillCheckHit")
 		Remotes.SkillCheck:FireServer(id, result)
 		if result == "great" then
-			toast("✨ GREAT skill check!", "success")
+			Audio.Play("Great")
+			toast("GREAT skill check", "success")
 		elseif result == "miss" then
-			toast("💥 Missed!", "error")
+			toast("Missed!", "error")
 		end
 	end
 	local function pressSkill()

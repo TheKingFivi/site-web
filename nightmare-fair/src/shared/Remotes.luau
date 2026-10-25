@@ -11,6 +11,7 @@ local EVENTS = {
 	"Scare", -- server -> client: jumpscare flash
 	"Swing", -- server -> all: play a swing effect
 	"Ping", -- server -> killer: show a noise marker at a position
+	"Sfx", -- server -> clients: play a sound effect (name, optional position)
 }
 local FUNCTIONS = { "SelectKiller", "BuyKiller", "UseSelfRescue", "BuyCosmetic", "Equip", "OpenCrate" }
 

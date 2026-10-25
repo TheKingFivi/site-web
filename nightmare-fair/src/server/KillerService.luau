@@ -9,6 +9,7 @@ local Cosmetics = require(Shared.Cosmetics)
 local Remotes = require(Shared.Remotes)
 
 local DataService = require(script.Parent.DataService)
+local KillerLook = require(script.Parent.KillerLook)
 local Match = require(script.Parent.Match)
 local SurvivorService = require(script.Parent.SurvivorService)
 
@@ -259,6 +260,20 @@ end
 
 KillerService.Dress = dressKiller
 
+-- Removes the built-in mask/hat when a Marketplace look is used (the weapon and glowing eyes stay).
+local WEAPON_PARTS = { Whip = true, Handle = true, Cleaver = true, Shaft = true, Blade = true }
+function KillerService.StripMask(character: Model)
+	local costume = character:FindFirstChild("KillerCostume")
+	if not costume then
+		return
+	end
+	for _, part in costume:GetChildren() do
+		if not WEAPON_PARTS[part.Name] then
+			part:Destroy()
+		end
+	end
+end
+
 -- Phantom invisibility ---------------------------------------------------
 
 local function setVanished(player: Player, vanished: boolean)
@@ -504,6 +519,7 @@ local function setupPallets()
 			end
 			spot.State = "Dropped"
 			spot.DropPrompt.Enabled = false
+			Remotes.Sfx:FireAllClients("Pallet", spot.Dropped.Position)
 			spot.BreakPrompt.Enabled = true
 			TweenService:Create(pallet, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { CFrame = spot.Dropped })
 				:Play()
@@ -565,7 +581,11 @@ function KillerService.Setup(player: Player, killerType: string)
 	if character then
 		Match.SetCollisionGroup(character, "Players")
 	end
+	local hasLook = KillerLook.ApplyToPlayer(player, killerType)
 	dressKiller(player.Character, killerType, player)
+	if hasLook then
+		KillerService.StripMask(player.Character)
+	end
 end
 
 function KillerService.Reveal(seconds: number)

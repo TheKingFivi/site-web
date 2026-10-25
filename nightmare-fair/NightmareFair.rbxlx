@@ -1,13 +1,21 @@
 <roblox version="4">
-  <Item class="ReplicatedStorage" referent="0">
+  <Item class="Lighting" referent="0">
+    <Properties>
+      <string name="Name">Lighting</string>
+      <float name="Brightness">2.4</float>
+      <float name="ClockTime">0.2</float>
+      <token name="Technology">4</token>
+    </Properties>
+  </Item>
+  <Item class="ReplicatedStorage" referent="1">
     <Properties>
       <string name="Name">ReplicatedStorage</string>
     </Properties>
-    <Item class="Folder" referent="1">
+    <Item class="Folder" referent="2">
       <Properties>
         <string name="Name">Shared</string>
       </Properties>
-      <Item class="ModuleScript" referent="2">
+      <Item class="ModuleScript" referent="3">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[-- Central game configuration. Tweak numbers here to balance the game.
@@ -196,11 +204,76 @@ Config.ProductOrder = { "KillerChance", "SelfRescue", "TicketsSmall", "TicketsLa
 Config.TicketPacks = { TicketsSmall = 500, TicketsLarge = 3000, TicketsHuge = 12000 }
 Config.KillerChancePack = 5
 
+-- Music & sound effects. The files are in the audio/ folder of the project:
+-- upload each one in the Creator Hub (Development Items -> Audio), then paste its ID here.
+Config.Sounds = {
+	LobbyMusic = { Id = 0, Volume = 0.45, File = "lobby_music.ogg" },
+	Ambience = { Id = 0, Volume = 0.5, File = "ambience.ogg" },
+	TerrorRadius = { Id = 0, Volume = 0.9, File = "terror_heartbeat.ogg" },
+	ChaseMusic = { Id = 0, Volume = 0.7, File = "chase_music.ogg" },
+	SkillCheck = { Id = 0, Volume = 0.6, File = "sfx_skillcheck.ogg" },
+	Great = { Id = 0, Volume = 0.6, File = "sfx_great.ogg" },
+	PumpkinLit = { Id = 0, Volume = 0.7, File = "sfx_pumpkin_lit.ogg" },
+	Hit = { Id = 0, Volume = 0.9, File = "sfx_hit.ogg" },
+	Pallet = { Id = 0, Volume = 1, File = "sfx_pallet.ogg" },
+	CageScream = { Id = 0, Volume = 0.9, File = "sfx_cage_scream.ogg" },
+	GateAlarm = { Id = 0, Volume = 0.6, File = "sfx_gate_alarm.ogg" },
+}
+Config.TerrorRadius = 45 -- studs: the heartbeat starts here
+Config.ChaseRadius = 22 -- studs: chase music kicks in here
+
+-- Real 3D looks for the killers from the Roblox Marketplace (roblox.com/catalog).
+-- Open an item, copy the number from its web address, and paste it below.
+-- Several accessories in one slot: separate with commas, e.g. "123,456".
+-- Leave everything empty to keep the built-in costume.
+-- Animations: Marketplace animation items (e.g. a zombie run) for player killers; the AI uses Roblox's defaults.
+Config.KillerLooks = {
+	Ringmaster = {
+		Hat = "",
+		Face = "",
+		Back = "",
+		Front = "",
+		Neck = "",
+		Shoulder = "",
+		Waist = "",
+		Shirt = 0,
+		Pants = 0,
+		FaceDecal = 0,
+		Animations = { Run = 0, Walk = 0, Idle = 0 },
+	},
+	Butcher = {
+		Hat = "",
+		Face = "",
+		Back = "",
+		Front = "",
+		Neck = "",
+		Shoulder = "",
+		Waist = "",
+		Shirt = 0,
+		Pants = 0,
+		FaceDecal = 0,
+		Animations = { Run = 0, Walk = 0, Idle = 0 },
+	},
+	Phantom = {
+		Hat = "",
+		Face = "",
+		Back = "",
+		Front = "",
+		Neck = "",
+		Shoulder = "",
+		Waist = "",
+		Shirt = 0,
+		Pants = 0,
+		FaceDecal = 0,
+		Animations = { Run = 0, Walk = 0, Idle = 0 },
+	},
+}
+
 return Config
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="3">
+      <Item class="ModuleScript" referent="4">
         <Properties>
           <string name="Name">Cosmetics</string>
           <string name="Source"><![CDATA[-- Every cosmetic in the game: survivor hats, trails and killer skins, plus Robux bundles and the Mystery Crate.
@@ -393,7 +466,7 @@ return Cosmetics
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="4">
+      <Item class="ModuleScript" referent="5">
         <Properties>
           <string name="Name">Format</string>
           <string name="Source"><![CDATA[local Format = {}
@@ -448,7 +521,7 @@ return Format
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="5">
+      <Item class="ModuleScript" referent="6">
         <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[-- Creates the remotes on the server and waits for them on the client.
@@ -464,6 +537,7 @@ local EVENTS = {
 	"Scare", -- server -> client: jumpscare flash
 	"Swing", -- server -> all: play a swing effect
 	"Ping", -- server -> killer: show a noise marker at a position
+	"Sfx", -- server -> clients: play a sound effect (name, optional position)
 }
 local FUNCTIONS = { "SelectKiller", "BuyKiller", "UseSelfRescue", "BuyCosmetic", "Equip", "OpenCrate" }
 
@@ -512,15 +586,15 @@ return Remotes
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="6">
+  <Item class="ServerScriptService" referent="7">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="7">
+    <Item class="Folder" referent="8">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="ModuleScript" referent="8">
+      <Item class="ModuleScript" referent="9">
         <Properties>
           <string name="Name">BotKiller</string>
           <string name="Source"><![CDATA[-- The AI killer: plays The Ringmaster when only one person is in the server, so a solo player can always play.
@@ -536,6 +610,7 @@ local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 
 local DataService = require(script.Parent.DataService)
+local KillerLook = require(script.Parent.KillerLook)
 local KillerService = require(script.Parent.KillerService)
 local Match = require(script.Parent.Match)
 local SurvivorService = require(script.Parent.SurvivorService)
@@ -565,6 +640,7 @@ local function buildBody(spawnCFrame: CFrame)
 	description.RightArmColor = Color3.fromRGB(30, 10, 18)
 	description.LeftLegColor = Color3.fromRGB(20, 15, 20)
 	description.RightLegColor = Color3.fromRGB(20, 15, 20)
+	KillerLook.Fill(description, "Ringmaster")
 	local model = Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
 	model.Name = "The Ringmaster"
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
@@ -577,8 +653,26 @@ local function buildBody(spawnCFrame: CFrame)
 	local root = model:FindFirstChild("HumanoidRootPart")
 	root:SetNetworkOwner(nil) -- the server drives it
 	KillerService.Dress(model, "Ringmaster")
+	if KillerLook.Has("Ringmaster") then
+		KillerService.StripMask(model)
+	end
 	CollectionService:AddTag(model, "KillerBot")
-	return model, humanoid, root
+
+	-- Walk / run / idle animations (Roblox defaults), switched by speed in think()
+	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator")
+	animator.Parent = humanoid
+	local tracks = {}
+	for name, id in KillerLook.AnimationsForBot() do
+		local animation = Instance.new("Animation")
+		animation.AnimationId = "rbxassetid://" .. id
+		local ok, track = pcall(animator.LoadAnimation, animator, animation)
+		if ok then
+			track.Looped = true
+			track.Priority = Enum.AnimationPriority.Movement
+			tracks[name] = track
+		end
+	end
+	return model, humanoid, root, tracks
 end
 
 local function canSee(from: Vector3, to: Vector3, ignore)
@@ -697,6 +791,18 @@ local function think()
 	local t = now()
 	local humanoid = bot.Humanoid
 
+	-- Animate: idle when standing, walk when slow, run when fast
+	local velocity = bot.Root.AssemblyLinearVelocity
+	local speed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+	local wanted = if speed < 1 then "Idle" elseif speed < 12 then "Walk" else "Run"
+	if wanted ~= bot.Playing and bot.Tracks[wanted] then
+		if bot.Playing and bot.Tracks[bot.Playing] then
+			bot.Tracks[bot.Playing]:Stop(0.2)
+		end
+		bot.Tracks[wanted]:Play(0.2)
+		bot.Playing = wanted
+	end
+
 	if t < bot.FrozenUntil or t < bot.StunnedUntil then
 		humanoid.WalkSpeed = 0
 		humanoid:MoveTo(bot.Root.Position)
@@ -774,8 +880,10 @@ end
 
 function BotKiller.Start()
 	BotKiller.Stop()
-	local model, humanoid, root = buildBody(Match.Map.KillerSpawn)
+	local model, humanoid, root, tracks = buildBody(Match.Map.KillerSpawn)
 	bot = {
+		Tracks = tracks,
+		Playing = nil,
 		Model = model,
 		Humanoid = humanoid,
 		Root = root,
@@ -835,7 +943,7 @@ return BotKiller
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">CosmeticService</string>
           <string name="Source"><![CDATA[-- Cosmetics: builds hats/masks and trails on characters, sells them for tickets,
@@ -968,17 +1076,12 @@ local HATS = {
 				CFrame.new(0.05 * i, 0.6 + i * 0.5, 0.05 * i) * CFrame.Angles(0, 0, math.rad(90))
 			)
 		end
-		attach(
-			f,
-			head,
-			{
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(0.2, 1.45, 1.45),
-				Color = rgb(150, 255, 90),
-				Material = Enum.Material.Neon,
-			},
-			CFrame.new(0, 0.9, 0) * CFrame.Angles(0, 0, math.rad(90))
-		)
+		attach(f, head, {
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.2, 1.45, 1.45),
+			Color = rgb(150, 255, 90),
+			Material = Enum.Material.Neon,
+		}, CFrame.new(0, 0.9, 0) * CFrame.Angles(0, 0, math.rad(90)))
 	end,
 	SkullMask = function(f, head)
 		local mask = attach(
@@ -1028,17 +1131,12 @@ local HATS = {
 		end
 	end,
 	Halo = function(f, head)
-		local ring = attach(
-			f,
-			head,
-			{
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(0.15, 1.6, 1.6),
-				Color = rgb(255, 240, 150),
-				Material = Enum.Material.Neon,
-			},
-			CFrame.new(0, 1.4, 0) * CFrame.Angles(0, 0, math.rad(90))
-		)
+		local ring = attach(f, head, {
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.15, 1.6, 1.6),
+			Color = rgb(255, 240, 150),
+			Material = Enum.Material.Neon,
+		}, CFrame.new(0, 1.4, 0) * CFrame.Angles(0, 0, math.rad(90)))
 		glow(ring, rgb(255, 240, 160), 10)
 	end,
 	Crown = function(f, head)
@@ -1228,7 +1326,7 @@ return CosmeticService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="10">
+      <Item class="ModuleScript" referent="11">
         <Properties>
           <string name="Name">DataService</string>
           <string name="Source"><![CDATA[-- Loads/saves player data with retries, session locking and autosave.
@@ -1495,7 +1593,110 @@ return DataService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
+        <Properties>
+          <string name="Name">KillerLook</string>
+          <string name="Source"><![CDATA[-- Real 3D killer looks built from Roblox Marketplace items (set in Config.KillerLooks),
+-- plus default Roblox R15 animations for the AI killer.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+
+local KillerLook = {}
+
+local SLOTS = {
+	Hat = "HatAccessory",
+	Face = "FaceAccessory",
+	Back = "BackAccessory",
+	Front = "FrontAccessory",
+	Neck = "NeckAccessory",
+	Shoulder = "ShouldersAccessory",
+	Waist = "WaistAccessory",
+}
+
+-- Roblox's own default R15 animations (usable by every game).
+KillerLook.DefaultAnimations = {
+	Run = 507767714,
+	Walk = 507777826,
+	Idle = 507766388,
+}
+
+function KillerLook.Has(killerType: string): boolean
+	local look = Config.KillerLooks[killerType]
+	if not look then
+		return false
+	end
+	for key in SLOTS do
+		if look[key] and look[key] ~= "" then
+			return true
+		end
+	end
+	return (look.Shirt or 0) ~= 0 or (look.Pants or 0) ~= 0 or (look.FaceDecal or 0) ~= 0
+end
+
+-- Fills a HumanoidDescription with the killer's Marketplace items.
+function KillerLook.Fill(description: HumanoidDescription, killerType: string)
+	local look = Config.KillerLooks[killerType]
+	if not look then
+		return description
+	end
+	for key, property in SLOTS do
+		description[property] = look[key] or ""
+	end
+	if (look.Shirt or 0) ~= 0 then
+		description.Shirt = look.Shirt
+	end
+	if (look.Pants or 0) ~= 0 then
+		description.Pants = look.Pants
+	end
+	if (look.FaceDecal or 0) ~= 0 then
+		description.Face = look.FaceDecal
+	end
+	local animations = look.Animations or {}
+	if (animations.Run or 0) ~= 0 then
+		description.RunAnimation = animations.Run
+	end
+	if (animations.Walk or 0) ~= 0 then
+		description.WalkAnimation = animations.Walk
+	end
+	if (animations.Idle or 0) ~= 0 then
+		description.IdleAnimation = animations.Idle
+	end
+	return description
+end
+
+-- Puts the Marketplace look on a player who is the killer this round. Returns true if a look was applied.
+function KillerLook.ApplyToPlayer(player: Player, killerType: string): boolean
+	if not KillerLook.Has(killerType) then
+		return false
+	end
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return false
+	end
+	local ok, err = pcall(function()
+		local description = humanoid:GetAppliedDescription()
+		humanoid:ApplyDescription(KillerLook.Fill(description, killerType))
+	end)
+	if not ok then
+		warn("[KillerLook] Could not apply look for " .. killerType .. ": " .. tostring(err))
+	end
+	return ok
+end
+
+-- The animation IDs the AI killer uses (Roblox's default R15 run/walk/idle).
+-- Marketplace animation packs only apply to player killers, through their HumanoidDescription.
+function KillerLook.AnimationsForBot()
+	return KillerLook.DefaultAnimations
+end
+
+return KillerLook
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">KillerService</string>
           <string name="Source"><![CDATA[-- The killer: costume, attacks, the three killer powers, pallets and stuns.
@@ -1509,6 +1710,7 @@ local Cosmetics = require(Shared.Cosmetics)
 local Remotes = require(Shared.Remotes)
 
 local DataService = require(script.Parent.DataService)
+local KillerLook = require(script.Parent.KillerLook)
 local Match = require(script.Parent.Match)
 local SurvivorService = require(script.Parent.SurvivorService)
 
@@ -1759,6 +1961,20 @@ end
 
 KillerService.Dress = dressKiller
 
+-- Removes the built-in mask/hat when a Marketplace look is used (the weapon and glowing eyes stay).
+local WEAPON_PARTS = { Whip = true, Handle = true, Cleaver = true, Shaft = true, Blade = true }
+function KillerService.StripMask(character: Model)
+	local costume = character:FindFirstChild("KillerCostume")
+	if not costume then
+		return
+	end
+	for _, part in costume:GetChildren() do
+		if not WEAPON_PARTS[part.Name] then
+			part:Destroy()
+		end
+	end
+end
+
 -- Phantom invisibility ---------------------------------------------------
 
 local function setVanished(player: Player, vanished: boolean)
@@ -2004,6 +2220,7 @@ local function setupPallets()
 			end
 			spot.State = "Dropped"
 			spot.DropPrompt.Enabled = false
+			Remotes.Sfx:FireAllClients("Pallet", spot.Dropped.Position)
 			spot.BreakPrompt.Enabled = true
 			TweenService:Create(pallet, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { CFrame = spot.Dropped })
 				:Play()
@@ -2065,7 +2282,11 @@ function KillerService.Setup(player: Player, killerType: string)
 	if character then
 		Match.SetCollisionGroup(character, "Players")
 	end
+	local hasLook = KillerLook.ApplyToPlayer(player, killerType)
 	dressKiller(player.Character, killerType, player)
+	if hasLook then
+		KillerService.StripMask(player.Character)
+	end
 end
 
 function KillerService.Reveal(seconds: number)
@@ -2159,7 +2380,7 @@ return KillerService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="12">
+      <Item class="Script" referent="14">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -2219,7 +2440,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[-- Lays out the whole Nightmare Fair map (500 x 500 studs) in themed zones, DBD-style:
@@ -2239,7 +2460,8 @@ local HALF = 250 -- the map spans -250..250 on X and Z
 local rng = Random.new(66613)
 local rgb = Color3.fromRGB
 
-local reserved = {} -- { position: Vector3, radius: number } spots random clutter must avoid
+local reserved = {} -- { position: Vector3, radius: number } spots props must not overlap
+local boothSpots = {}
 
 local function at(x: number, z: number, yawDeg: number?)
 	return CFrame.new(x, 0, z) * CFrame.Angles(0, math.rad(yawDeg or 0), 0)
@@ -2262,32 +2484,57 @@ local function isFree(x: number, z: number, radius: number)
 	return true
 end
 
-local function scatter(count: number, radius: number, build)
-	local placed = 0
-	for _ = 1, count * 12 do
-		if placed >= count then
-			break
-		end
-		local x, z = rng:NextNumber(-HALF + 10, HALF - 10), rng:NextNumber(-HALF + 10, HALF - 10)
-		if isFree(x, z, radius) then
-			build(at(x, z, rng:NextNumber(0, 360)))
-			reserve(x, z, radius)
-			placed += 1
-		end
-	end
+local terrain = workspace.Terrain
+
+-- Paints a strip of the ground with a terrain material without changing its height.
+local function paintStrip(from: Vector2, to: Vector2, width: number, material: Enum.Material)
+	local a, b = Vector3.new(from.X, -1, from.Y), Vector3.new(to.X, -1, to.Y)
+	terrain:FillBlock(CFrame.lookAt((a + b) / 2, b), Vector3.new(width, 2, (b - a).Magnitude + width), material)
 end
 
-local function path(parent, from: Vector2, to: Vector2, width: number)
-	local a, b = Vector3.new(from.X, 0.05, from.Y), Vector3.new(to.X, 0.05, to.Y)
-	local mid = (a + b) / 2
-	Props.Part({
-		Name = "Path",
-		Size = Vector3.new(width, 0.1, (b - a).Magnitude + width),
-		CFrame = CFrame.lookAt(mid, b),
-		Color = rgb(85, 70, 55),
-		Material = Enum.Material.Ground,
-		CanCollide = false,
-	}, parent)
+local function paintCircle(x: number, z: number, radius: number, material: Enum.Material)
+	terrain:FillCylinder(CFrame.new(x, -1, z), 2, radius, material)
+end
+
+local function path(_, from: Vector2, to: Vector2, width: number)
+	paintStrip(from, to, width, Enum.Material.Mud)
+end
+
+-- Sculpted ground: grass base, worn patches, zone floors, a real water lake, and hills beyond the fence.
+local function buildTerrain()
+	terrain:Clear()
+	terrain:FillBlock(CFrame.new(0, -6, 0), Vector3.new(HALF * 2 + 260, 12, HALF * 2 + 260), Enum.Material.Grass)
+	-- Worn, uneven ground so it isn't one flat color
+	for _ = 1, 70 do
+		local x, z = rng:NextNumber(-HALF, HALF), rng:NextNumber(-HALF, HALF)
+		local material = ({ Enum.Material.LeafyGrass, Enum.Material.Ground, Enum.Material.Mud })[rng:NextInteger(1, 3)]
+		paintCircle(x, z, rng:NextNumber(6, 18), material)
+	end
+	-- Zone floors
+	paintCircle(0, 0, 30, Enum.Material.Cobblestone) -- carousel plaza
+	terrain:FillBlock(CFrame.new(-167, -1, -167), Vector3.new(146, 2, 146), Enum.Material.Ground) -- corn field soil
+	terrain:FillBlock(CFrame.new(170, -1, -170), Vector3.new(140, 2, 140), Enum.Material.Slate) -- junkyard gravel
+	terrain:FillBlock(CFrame.new(-176, -1, 75), Vector3.new(64, 2, 52), Enum.Material.Mud) -- graveyard
+	terrain:FillBlock(CFrame.new(-165, -1, 175), Vector3.new(70, 2, 60), Enum.Material.Ground) -- farmyard
+	paintCircle(150, 0, 36, Enum.Material.Sand) -- circus ring sawdust
+	-- Lake: dig a basin, fill it with water, muddy shore
+	terrain:FillBlock(CFrame.new(175, -4, 175), Vector3.new(88, 8, 68), Enum.Material.Mud)
+	terrain:FillBlock(CFrame.new(175, -3, 175), Vector3.new(80, 6, 60), Enum.Material.Air)
+	terrain:FillBlock(CFrame.new(175, -4, 175), Vector3.new(80, 4, 60), Enum.Material.Water)
+	-- Hills and rock outcrops beyond the fence (leave the two exit corridors open)
+	for i = 0, 47 do
+		local angle = i / 48 * math.pi * 2
+		local dist = HALF + rng:NextNumber(55, 85)
+		local x = math.clamp(math.cos(angle) * dist * 1.25, -HALF - 85, HALF + 85)
+		local z = math.clamp(math.sin(angle) * dist * 1.25, -HALF - 85, HALF + 85)
+		if math.abs(x) > 50 or math.abs(z) < HALF then
+			local material = if rng:NextNumber() < 0.25 then Enum.Material.Rock else Enum.Material.Grass
+			terrain:FillBall(Vector3.new(x, -12, z), rng:NextNumber(38, 52), material)
+		end
+	end
+	pcall(function()
+		terrain.Decoration = true -- animated grass blades
+	end)
 end
 
 local function buildCornMaze(parent)
@@ -2414,6 +2661,7 @@ local function buildMidway(parent)
 		for _, side in { -1, 1 } do
 			n += 1
 			Props.Booth(at(side * 22, z, if side < 0 then -90 else 90), midway, colors[n % #colors + 1])
+			table.insert(boothSpots, at(side * 22, z, if side < 0 then -90 else 90))
 			reserve(side * 22, z, 8)
 		end
 	end
@@ -2421,6 +2669,7 @@ local function buildMidway(parent)
 		for _, side in { -1, 1 } do
 			n += 1
 			Props.Booth(at(x, side * 22, if side < 0 then 0 else 180), midway, colors[n % #colors + 1])
+			table.insert(boothSpots, at(x, side * 22, if side < 0 then 0 else 180))
 			reserve(x, side * 22, 8)
 		end
 	end
@@ -2526,24 +2775,110 @@ local function buildLobby(parent)
 	return origin * CFrame.new(0, 3, 18)
 end
 
+local function tryPlace(x: number, z: number, radius: number, build)
+	if isFree(x, z, radius) then
+		build(at(x, z, rng:NextNumber(0, 360)))
+		reserve(x, z, radius)
+		return true
+	end
+	return false
+end
+
+local function dressMap(map, pumpkinSpots)
+	local dressing = Instance.new("Folder")
+	dressing.Name = "SetDressing"
+	dressing.Parent = map
+
+	-- A line of dead trees just inside the fence
+	for d = -HALF + 20, HALF - 20, 30 do
+		for _, spot in { { d, -HALF + 10 }, { d, HALF - 10 }, { -HALF + 10, d }, { HALF - 10, d } } do
+			if math.abs(spot[1]) > 30 or math.abs(spot[2]) < HALF - 30 then
+				tryPlace(spot[1] + rng:NextNumber(-4, 4), spot[2] + rng:NextNumber(-3, 3), 4, function(cf)
+					Props.DeadTree(cf, dressing)
+				end)
+			end
+		end
+	end
+
+	-- Behind the game booths: supply crates and barrels
+	for i, cf in boothSpots do
+		local back = cf * CFrame.new(if i % 2 == 0 then 8 else -8, 0, 6)
+		local p = back.Position
+		tryPlace(p.X, p.Z, 2.5, function(c)
+			if i % 3 == 0 then
+				Props.CrateStack(c, dressing)
+			else
+				Props.Barrel(c, dressing)
+			end
+		end)
+	end
+
+	-- Every Ritual Pumpkin has an offering pile and a scarecrow keeping watch
+	for i, s in pumpkinSpots do
+		tryPlace(s[1] + 8, s[2] + 5, 3, function(cf)
+			Props.PumpkinPile(cf, dressing)
+		end)
+		if i % 2 == 1 then
+			tryPlace(s[1] - 8, s[2] - 6, 2, function(cf)
+				Props.Scarecrow(cf, dressing)
+			end)
+		end
+	end
+
+	-- Corn field edge: scarecrows facing the midway
+	for z = -225, -110, 38 do
+		tryPlace(-88, z, 2, function(cf)
+			Props.Scarecrow(cf, dressing)
+		end)
+	end
+
+	-- Junkyard: tire stacks and oil barrels between the car piles
+	for _, s in { { 130, -140 }, { 165, -120 }, { 200, -160 }, { 150, -190 }, { 225, -205 }, { 110, -205 }, { 185, -235 } } do
+		tryPlace(s[1], s[2], 3, function(cf)
+			Props.TireStack(cf, dressing)
+		end)
+		tryPlace(s[1] + 5, s[2] + 4, 2, function(cf)
+			Props.Barrel(cf, dressing)
+		end)
+	end
+
+	-- Farm: fenced pumpkin patch, hay stacks along the barn
+	Props.LowFence(Vector3.new(-228, 0, 215), Vector3.new(-170, 0, 215), dressing)
+	Props.LowFence(Vector3.new(-228, 0, 238), Vector3.new(-170, 0, 238), dressing)
+	for i = 0, 3 do
+		tryPlace(-190 + i * 7, 150, 3, function(cf)
+			Props.HayBale(cf, dressing)
+		end)
+	end
+
+	-- Graveyard: dead trees around its edge
+	for _, s in { { -212, 52 }, { -140, 50 }, { -212, 102 }, { -150, 104 } } do
+		tryPlace(s[1], s[2], 3, function(cf)
+			Props.DeadTree(cf, dressing)
+		end)
+	end
+
+	-- Lake shore and the map corners: rock outcrops
+	for _, s in { { 128, 160 }, { 222, 150 }, { 140, 222 }, { -228, -228 }, { 228, 228 }, { -228, 228 } } do
+		tryPlace(s[1], s[2], 6, function(cf)
+			Props.Rocks(cf, dressing)
+		end)
+	end
+end
+
 function MapBuilder.Build()
 	local existing = workspace:FindFirstChild("Baseplate")
 	if existing then
 		existing:Destroy()
 	end
 	table.clear(reserved)
+	table.clear(boothSpots)
 
 	local map = Instance.new("Folder")
 	map.Name = "Map"
 	map.Parent = workspace
 
-	Props.Part({
-		Name = "Ground",
-		Size = Vector3.new(HALF * 2 + 200, 2, HALF * 2 + 200),
-		CFrame = CFrame.new(0, -1, 0),
-		Color = rgb(40, 52, 32),
-		Material = Enum.Material.Grass,
-	}, map)
+	buildTerrain()
 
 	-- Reserve the main paths so clutter doesn't block them
 	for i = -HALF, HALF, 10 do
@@ -2664,34 +2999,8 @@ function MapBuilder.Build()
 	buildPathsAndLights(map)
 	buildBoundary(map)
 
-	-- Clutter everywhere else
-	local clutter = Instance.new("Folder")
-	clutter.Name = "Clutter"
-	clutter.Parent = map
-	scatter(30, 3, function(cf)
-		Props.HayBale(cf, clutter)
-	end)
-	scatter(22, 4, function(cf)
-		Props.CrateStack(cf, clutter)
-	end)
-	scatter(30, 2.5, function(cf)
-		Props.Barrel(cf, clutter)
-	end)
-	scatter(22, 4, function(cf)
-		Props.PumpkinPile(cf, clutter)
-	end)
-	scatter(14, 3, function(cf)
-		Props.Scarecrow(cf, clutter)
-	end)
-	scatter(35, 4, function(cf)
-		Props.DeadTree(cf, clutter)
-	end)
-	scatter(14, 6, function(cf)
-		Props.Rocks(cf, clutter)
-	end)
-	scatter(12, 3, function(cf)
-		Props.Tombstone(cf, clutter)
-	end)
+	-- Set dressing: every prop is placed on purpose, around the place it belongs to
+	dressMap(map, pumpkinSpots)
 
 	-- Spawns
 	result.SurvivorSpawns = {
@@ -2712,7 +3021,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Match</string>
           <string name="Source"><![CDATA[-- Shared state for the current match, plus small helpers every service uses.
@@ -2828,7 +3137,7 @@ return Match
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">MonetizationService</string>
           <string name="Source"><![CDATA[-- Game passes, developer products, killer unlocks and the lobby killer picker.
@@ -3021,7 +3330,7 @@ return MonetizationService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">ObjectiveService</string>
           <string name="Source"><![CDATA[-- Survivor objectives: light Ritual Pumpkins (with skill checks), power and open the exit gates, escape.
@@ -3075,6 +3384,7 @@ end
 
 local function powerGates()
 	workspace:SetAttribute("GatesPowered", true)
+	Remotes.Sfx:FireAllClients("GateAlarm")
 	workspace:SetAttribute("CollapseEndsAt", now() + Config.EndGameCollapse)
 	for _, gate in Match.Map.Gates do
 		gate.Lamp.Color = Color3.fromRGB(255, 200, 40)
@@ -3093,6 +3403,7 @@ end
 local function lightPumpkin(pumpkin, workers)
 	pumpkin.Lit = true
 	pumpkin.Progress = 1
+	Remotes.Sfx:FireAllClients("PumpkinLit", pumpkin.Position)
 	pumpkin.Prompt.Enabled = false
 	setPumpkinVisual(pumpkin)
 	for _, worker in workers do
@@ -3208,7 +3519,7 @@ local function setupPumpkins()
 		local label = Instance.new("TextLabel")
 		label.Size = UDim2.fromScale(1, 1)
 		label.BackgroundTransparency = 1
-		label.Font = Enum.Font.FredokaOne
+		label.Font = Enum.Font.Oswald
 		label.TextScaled = true
 		label.TextColor3 = Color3.fromRGB(255, 190, 90)
 		label.Text = "🎃 0%"
@@ -3353,7 +3664,7 @@ return ObjectiveService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">Props</string>
           <string name="Source"><![CDATA[-- A library of carnival props, all built from parts so the game needs no uploaded assets.
@@ -3439,7 +3750,7 @@ function Props.Billboard(part: BasePart, text: string, color: Color3, height: nu
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.FredokaOne
+	label.Font = Enum.Font.Oswald
 	label.TextScaled = true
 	label.TextColor3 = color
 	label.Text = text
@@ -3800,16 +4111,13 @@ end
 
 function Props.TicketBooth(cf: CFrame, parent)
 	local model = Props.Model("TicketBooth", parent)
-	P(
-		{
-			Name = "Body",
-			Size = Vector3.new(7, 8, 7),
-			CFrame = cf * CFrame.new(0, 4, 0),
-			Color = C.red,
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
+	P({
+		Name = "Body",
+		Size = Vector3.new(7, 8, 7),
+		CFrame = cf * CFrame.new(0, 4, 0),
+		Color = C.red,
+		Material = Enum.Material.WoodPlanks,
+	}, model)
 	P({
 		Name = "Window",
 		Size = Vector3.new(4, 3, 0.2),
@@ -4449,15 +4757,7 @@ end
 
 function Props.Lake(cf: CFrame, parent, size: Vector2)
 	local model = Props.Model("Lake", parent)
-	P({
-		Name = "Water",
-		Size = Vector3.new(size.X, 1, size.Y),
-		CFrame = cf * CFrame.new(0, -0.3, 0),
-		Color = rgb(25, 45, 55),
-		Material = Enum.Material.Glass,
-		Transparency = 0.15,
-		Reflectance = 0.2,
-	}, model)
+	-- The water itself is real Terrain water (made in MapBuilder); this adds the dock, boat and shore rocks.
 	-- Water is impassable: invisible wall around the edge keeps players on land
 	P({ Name = "Blocker", Size = Vector3.new(size.X - 4, 14, size.Y - 4), CFrame = cf * CFrame.new(0, 7, 0), Transparency = 1 }, model)
 	-- Dock
@@ -4650,16 +4950,13 @@ end
 function Props.LWall(cf: CFrame, parent)
 	local model = Props.Model("LWall", parent)
 	local color = rgb(95, 90, 95)
-	P(
-		{
-			Name = "Wall",
-			Size = Vector3.new(16, 9, 1.4),
-			CFrame = cf * CFrame.new(0, 4.5, 0),
-			Color = color,
-			Material = Enum.Material.Brick,
-		},
-		model
-	)
+	P({
+		Name = "Wall",
+		Size = Vector3.new(16, 9, 1.4),
+		CFrame = cf * CFrame.new(0, 4.5, 0),
+		Color = color,
+		Material = Enum.Material.Brick,
+	}, model)
 	P({
 		Name = "Wall",
 		Size = Vector3.new(1.4, 9, 12),
@@ -4717,6 +5014,54 @@ function Props.FortuneTent(cf: CFrame, parent)
 	}, model)
 	Props.Light(ball, rgb(150, 220, 255), 14, 1.2)
 	return model
+end
+
+function Props.TireStack(cf: CFrame, parent)
+	local model = Props.Model("TireStack", parent)
+	for i = 0, rng:NextInteger(2, 4) do
+		P({
+			Name = "Tire",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1.1, 3.2, 3.2),
+			CFrame = cf
+				* CFrame.new(rng:NextNumber(-0.3, 0.3), 0.55 + i * 1.1, rng:NextNumber(-0.3, 0.3))
+				* CFrame.Angles(0, 0, math.rad(90)),
+			Color = rgb(22, 22, 24),
+			Material = Enum.Material.Rubber,
+		}, model)
+	end
+	return model
+end
+
+-- A short wooden farm fence between two points
+function Props.LowFence(a: Vector3, b: Vector3, parent)
+	local length = (b - a).Magnitude
+	local cf = CFrame.lookAt((a + b) / 2, b)
+	for _, y in { 1.2, 2.6 } do
+		P(
+			{
+				Name = "Rail",
+				Size = Vector3.new(0.3, 0.4, length),
+				CFrame = cf + Vector3.new(0, y, 0),
+				Color = rgb(92, 70, 48),
+				Material = Enum.Material.Wood,
+			},
+			parent
+		)
+	end
+	for i = 0, math.floor(length / 6) do
+		local pos = a:Lerp(b, math.min(1, i * 6 / length))
+		P(
+			{
+				Name = "Post",
+				Size = Vector3.new(0.5, 3.4, 0.5),
+				Position = pos + Vector3.new(0, 1.7, 0),
+				Color = rgb(70, 52, 36),
+				Material = Enum.Material.Wood,
+			},
+			parent
+		)
+	end
 end
 
 -- Gameplay objects --------------------------------------------------------
@@ -4991,7 +5336,7 @@ return Props
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">RoundService</string>
           <string name="Source"><![CDATA[-- The round loop: lobby -> pick a killer -> 7-minute match -> results -> back to the lobby.
@@ -5276,28 +5621,53 @@ function RoundService.OnCharacterAdded(player: Player, character: Model)
 	end
 end
 
+-- Moonlit and readable, DBD-style: you can see the map, but the distance fades into fog,
+-- and warm carnival lights pop against the cold blue night.
 local function setupLighting()
-	Lighting.ClockTime = 0
-	Lighting.Brightness = 0.6
-	Lighting.Ambient = Color3.fromRGB(45, 35, 55)
-	Lighting.OutdoorAmbient = Color3.fromRGB(70, 60, 95)
+	Lighting.ClockTime = 0.2
+	Lighting.GeographicLatitude = 35
+	Lighting.Brightness = 2.4
+	Lighting.ExposureCompensation = 0.35
+	Lighting.Ambient = Color3.fromRGB(78, 76, 96)
+	Lighting.OutdoorAmbient = Color3.fromRGB(128, 124, 152)
+	Lighting.ColorShift_Top = Color3.fromRGB(150, 165, 210)
+	Lighting.EnvironmentDiffuseScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.ShadowSoftness = 0.35
 	Lighting.GlobalShadows = true
+
+	local sky = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky")
+	sky.MoonAngularSize = 18
+	sky.StarCount = 4000
+	sky.SunAngularSize = 0
+	sky.Parent = Lighting
+
 	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
-	atmosphere.Density = 0.42
-	atmosphere.Color = Color3.fromRGB(70, 55, 95)
-	atmosphere.Decay = Color3.fromRGB(30, 20, 40)
-	atmosphere.Haze = 2
+	atmosphere.Density = 0.3
+	atmosphere.Offset = 0.12
+	atmosphere.Color = Color3.fromRGB(122, 118, 150)
+	atmosphere.Decay = Color3.fromRGB(62, 54, 84)
+	atmosphere.Haze = 1.6
+	atmosphere.Glare = 0
 	atmosphere.Parent = Lighting
+
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect") or Instance.new("BloomEffect")
-	bloom.Intensity = 0.7
-	bloom.Size = 30
-	bloom.Threshold = 0.9
+	bloom.Intensity = 0.55
+	bloom.Size = 28
+	bloom.Threshold = 1.1
 	bloom.Parent = Lighting
+
 	local grade = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Instance.new("ColorCorrectionEffect")
-	grade.Contrast = 0.12
-	grade.Saturation = 0.05
-	grade.TintColor = Color3.fromRGB(235, 225, 255)
+	grade.Brightness = 0.03
+	grade.Contrast = 0.14
+	grade.Saturation = -0.22
+	grade.TintColor = Color3.fromRGB(222, 226, 245)
 	grade.Parent = Lighting
+
+	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect")
+	if rays then
+		rays:Destroy()
+	end
 end
 
 function RoundService.Init()
@@ -5318,7 +5688,7 @@ return RoundService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">SurvivorService</string>
           <string name="Source"><![CDATA[-- Survivors: health states, healing, being carried, Crow Cages, rescues, elimination, escape and ghosts.
@@ -5444,6 +5814,10 @@ end
 function SurvivorService.Hit(player: Player): string?
 	local health = Match.Health(player)
 	player:SetAttribute("WorkingOn", nil)
+	local hitRoot = Match.Root(player)
+	if hitRoot and (health == "Healthy" or health == "Injured") then
+		Remotes.Sfx:FireAllClients("Hit", hitRoot.Position)
+	end
 	if health == "Healthy" then
 		SurvivorService.SetHealth(player, "Injured")
 		-- Burst of speed so the survivor can get away
@@ -5655,6 +6029,7 @@ function SurvivorService.CageSurvivor(killer: Player, cage)
 	caged[survivor] = cage
 	root.CFrame = cage.Inside
 	root.Anchored = true
+	Remotes.Sfx:FireAllClients("CageScream", cage.Position)
 	SurvivorService.SetHealth(survivor, "Caged")
 	cage.Light.Color = Color3.fromRGB(255, 200, 60)
 
@@ -5797,19 +6172,190 @@ return SurvivorService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="20">
+  <Item class="StarterPlayer" referent="22">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="21">
+    <Item class="StarterPlayerScripts" referent="23">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="22">
+      <Item class="Folder" referent="24">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="25">
+          <Properties>
+            <string name="Name">Audio</string>
+            <string name="Source"><![CDATA[-- Music and sound, DBD-style:
+--   lobby: broken music-box waltz
+--   match: wind + drone ambience
+--   survivors: heartbeat that grows as the killer gets closer, chase music when it's on top of you
+--   killer: chase music when a survivor is close
+--   one-shot effects, positioned in 3D where they happen
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Remotes = require(Shared.Remotes)
+
+local player = Players.LocalPlayer
+
+local Audio = {}
+
+local loops = {}
+
+local function soundId(key: string): string?
+	local info = Config.Sounds[key]
+	if info and info.Id ~= 0 then
+		return "rbxassetid://" .. info.Id
+	end
+	return nil
+end
+
+local function makeLoop(key: string)
+	local id = soundId(key)
+	if not id then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.Name = key
+	sound.SoundId = id
+	sound.Looped = true
+	sound.Volume = 0
+	sound.Parent = SoundService
+	sound:Play()
+	loops[key] = { Sound = sound, Target = 0, Max = Config.Sounds[key].Volume }
+end
+
+-- Plays a one-shot effect. With a position, it's heard in 3D from that spot.
+function Audio.Play(key: string, position: Vector3?)
+	local id = soundId(key)
+	if not id then
+		return
+	end
+	local sound = Instance.new("Sound")
+	sound.SoundId = id
+	sound.Volume = Config.Sounds[key].Volume
+	if position then
+		local anchor = Instance.new("Part")
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false
+		anchor.CanTouch = false
+		anchor.Transparency = 1
+		anchor.Size = Vector3.one
+		anchor.Position = position
+		anchor.Parent = workspace
+		sound.RollOffMode = Enum.RollOffMode.InverseTapered
+		sound.RollOffMinDistance = 15
+		sound.RollOffMaxDistance = 220
+		sound.Parent = anchor
+		sound.Ended:Connect(function()
+			anchor:Destroy()
+		end)
+	else
+		sound.Parent = SoundService
+		sound.Ended:Connect(function()
+			sound:Destroy()
+		end)
+	end
+	sound:Play()
+end
+
+local function killerRoot(): BasePart?
+	for _, other in Players:GetPlayers() do
+		if other:GetAttribute("Role") == "Killer" and not other:GetAttribute("Vanished") then
+			local character = other.Character
+			return character and character:FindFirstChild("HumanoidRootPart")
+		end
+	end
+	for _, bot in CollectionService:GetTagged("KillerBot") do
+		return bot:FindFirstChild("HumanoidRootPart")
+	end
+	return nil
+end
+
+local function nearestSurvivorDistance(from: Vector3): number
+	local best = math.huge
+	for _, other in Players:GetPlayers() do
+		if other ~= player and other:GetAttribute("Role") == "Survivor" then
+			local character = other.Character
+			local root = character and character:FindFirstChild("HumanoidRootPart")
+			if root then
+				best = math.min(best, (root.Position - from).Magnitude)
+			end
+		end
+	end
+	return best
+end
+
+local function setTarget(key: string, fraction: number)
+	local loop = loops[key]
+	if loop then
+		loop.Target = loop.Max * math.clamp(fraction, 0, 1)
+	end
+end
+
+function Audio.Start()
+	for _, key in { "LobbyMusic", "Ambience", "TerrorRadius", "ChaseMusic" } do
+		makeLoop(key)
+	end
+
+	Remotes.Sfx.OnClientEvent:Connect(function(key, position)
+		Audio.Play(key, position)
+	end)
+	Remotes.SkillCheck.OnClientEvent:Connect(function()
+		Audio.Play("SkillCheck")
+	end)
+
+	RunService.Heartbeat:Connect(function(dt)
+		local role = player:GetAttribute("Role") or "Lobby"
+		local inMatch = workspace:GetAttribute("Phase") == "Match"
+		local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
+		local terror, chase = 0, 0
+		if inMatch and myRoot then
+			if role == "Survivor" then
+				local root = killerRoot()
+				if root then
+					local distance = (root.Position - myRoot.Position).Magnitude
+					terror = 1 - distance / Config.TerrorRadius
+					chase = if distance < Config.ChaseRadius then 1 else 0
+				end
+			elseif role == "Killer" then
+				chase = if nearestSurvivorDistance(myRoot.Position) < Config.ChaseRadius then 1 else 0
+			end
+		end
+		local inLobby = not inMatch or role == "Lobby" or role == "Escaped"
+		setTarget("LobbyMusic", if inLobby then 1 else 0)
+		setTarget("Ambience", if inMatch and not inLobby then 1 - chase * 0.6 else 0)
+		setTarget("TerrorRadius", terror * (1 - chase * 0.5))
+		setTarget("ChaseMusic", chase)
+
+		-- Smooth fades
+		for _, loop in loops do
+			local speed = if loop.Target > loop.Sound.Volume then 1.5 else 0.6
+			local step = speed * dt
+			loop.Sound.Volume += math.clamp(loop.Target - loop.Sound.Volume, -step, step)
+		end
+		local heartbeat = loops.TerrorRadius
+		if heartbeat then
+			-- The heartbeat speeds up as the killer closes in
+			heartbeat.Sound.PlaybackSpeed = 1 + math.clamp(terror, 0, 1) * 0.35
+		end
+	end)
+end
+
+return Audio
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="26">
           <Properties>
             <string name="Name">Controls</string>
             <string name="Source"><![CDATA[-- Killer input: click / ATTACK button to swing, Q / POWER button for the killer's power.
@@ -5883,7 +6429,7 @@ return Controls
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- World effects: spinning rides, role-based prompt visibility, killer swing trails,
@@ -6022,7 +6568,7 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">HUD</string>
             <string name="Source"><![CDATA[-- All on-screen UI, built from code.
@@ -6046,20 +6592,20 @@ local player = Players.LocalPlayer
 
 local HUD = {}
 
-local SCARY = Enum.Font.Creepster
-local FONT = Enum.Font.FredokaOne
+local SCARY = Enum.Font.SpecialElite
+local FONT = Enum.Font.Oswald
 local C = {
-	panel = Color3.fromRGB(22, 14, 26),
-	panel2 = Color3.fromRGB(40, 26, 46),
-	red = Color3.fromRGB(200, 35, 50),
-	gold = Color3.fromRGB(255, 195, 70),
-	green = Color3.fromRGB(60, 190, 95),
-	purple = Color3.fromRGB(130, 70, 200),
-	bone = Color3.fromRGB(240, 232, 220),
-	dim = Color3.fromRGB(170, 158, 170),
-	grey = Color3.fromRGB(80, 72, 84),
+	panel = Color3.fromRGB(12, 11, 13),
+	panel2 = Color3.fromRGB(26, 24, 28),
+	red = Color3.fromRGB(150, 22, 30),
+	gold = Color3.fromRGB(176, 140, 82),
+	green = Color3.fromRGB(58, 64, 60),
+	purple = Color3.fromRGB(70, 52, 78),
+	bone = Color3.fromRGB(226, 220, 208),
+	dim = Color3.fromRGB(150, 144, 140),
+	grey = Color3.fromRGB(46, 44, 48),
 }
-local TOAST = { success = Color3.fromRGB(40, 130, 70), error = C.red, info = Color3.fromRGB(80, 55, 120) }
+local TOAST = { success = Color3.fromRGB(34, 48, 38), error = Color3.fromRGB(70, 16, 20), info = Color3.fromRGB(30, 28, 34) }
 local HEALTH_ICON = { Healthy = "❤️", Injured = "🩸", Downed = "🆘", Carried = "😱", Caged = "🐦‍⬛" }
 
 local function new(className: string, props, children)
@@ -6078,7 +6624,7 @@ local function new(className: string, props, children)
 	return inst
 end
 local function corner(r: number?)
-	return new("UICorner", { CornerRadius = UDim.new(0, r or 10) })
+	return new("UICorner", { CornerRadius = UDim.new(0, math.min(r or 3, 3)) }) -- sharp, DBD-like
 end
 local function outline()
 	return new("UIStroke", { Thickness = 2, Color = Color3.new(0, 0, 0), Transparency = 0.1 })
@@ -6120,7 +6666,7 @@ local function invoke(remote: RemoteFunction, ...)
 	return success, message, extra
 end
 
-function HUD.Start()
+function HUD.Start(Audio)
 	local gui = new("ScreenGui", {
 		Name = "FairHUD",
 		ResetOnSpawn = false,
@@ -6343,9 +6889,10 @@ function HUD.Start()
 		ContextActionService:UnbindAction("SkillCheckHit")
 		Remotes.SkillCheck:FireServer(id, result)
 		if result == "great" then
-			toast("✨ GREAT skill check!", "success")
+			Audio.Play("Great")
+			toast("GREAT skill check", "success")
 		elseif result == "miss" then
-			toast("💥 Missed!", "error")
+			toast("Missed!", "error")
 		end
 	end
 	local function pressSkill()
@@ -6962,20 +7509,22 @@ return HUD
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="26">
+        <Item class="LocalScript" referent="29">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[-- Client entry point.
 local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 
+local Audio = require(script.Parent.Audio)
 local Controls = require(script.Parent.Controls)
 local Effects = require(script.Parent.Effects)
 local HUD = require(script.Parent.HUD)
 
+Audio.Start()
 Effects.Start()
 Controls.Start()
-HUD.Start()
+HUD.Start(Audio)
 
 -- Rainbow trail cosmetic
 RunService.RenderStepped:Connect(function()

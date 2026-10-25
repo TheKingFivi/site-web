@@ -280,28 +280,53 @@ function RoundService.OnCharacterAdded(player: Player, character: Model)
 	end
 end
 
+-- Moonlit and readable, DBD-style: you can see the map, but the distance fades into fog,
+-- and warm carnival lights pop against the cold blue night.
 local function setupLighting()
-	Lighting.ClockTime = 0
-	Lighting.Brightness = 0.6
-	Lighting.Ambient = Color3.fromRGB(45, 35, 55)
-	Lighting.OutdoorAmbient = Color3.fromRGB(70, 60, 95)
+	Lighting.ClockTime = 0.2
+	Lighting.GeographicLatitude = 35
+	Lighting.Brightness = 2.4
+	Lighting.ExposureCompensation = 0.35
+	Lighting.Ambient = Color3.fromRGB(78, 76, 96)
+	Lighting.OutdoorAmbient = Color3.fromRGB(128, 124, 152)
+	Lighting.ColorShift_Top = Color3.fromRGB(150, 165, 210)
+	Lighting.EnvironmentDiffuseScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.ShadowSoftness = 0.35
 	Lighting.GlobalShadows = true
+
+	local sky = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky")
+	sky.MoonAngularSize = 18
+	sky.StarCount = 4000
+	sky.SunAngularSize = 0
+	sky.Parent = Lighting
+
 	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
-	atmosphere.Density = 0.42
-	atmosphere.Color = Color3.fromRGB(70, 55, 95)
-	atmosphere.Decay = Color3.fromRGB(30, 20, 40)
-	atmosphere.Haze = 2
+	atmosphere.Density = 0.3
+	atmosphere.Offset = 0.12
+	atmosphere.Color = Color3.fromRGB(122, 118, 150)
+	atmosphere.Decay = Color3.fromRGB(62, 54, 84)
+	atmosphere.Haze = 1.6
+	atmosphere.Glare = 0
 	atmosphere.Parent = Lighting
+
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect") or Instance.new("BloomEffect")
-	bloom.Intensity = 0.7
-	bloom.Size = 30
-	bloom.Threshold = 0.9
+	bloom.Intensity = 0.55
+	bloom.Size = 28
+	bloom.Threshold = 1.1
 	bloom.Parent = Lighting
+
 	local grade = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Instance.new("ColorCorrectionEffect")
-	grade.Contrast = 0.12
-	grade.Saturation = 0.05
-	grade.TintColor = Color3.fromRGB(235, 225, 255)
+	grade.Brightness = 0.03
+	grade.Contrast = 0.14
+	grade.Saturation = -0.22
+	grade.TintColor = Color3.fromRGB(222, 226, 245)
 	grade.Parent = Lighting
+
+	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect")
+	if rays then
+		rays:Destroy()
+	end
 end
 
 function RoundService.Init()

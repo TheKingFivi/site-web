@@ -15,7 +15,8 @@ local HALF = 250 -- the map spans -250..250 on X and Z
 local rng = Random.new(66613)
 local rgb = Color3.fromRGB
 
-local reserved = {} -- { position: Vector3, radius: number } spots random clutter must avoid
+local reserved = {} -- { position: Vector3, radius: number } spots props must not overlap
+local boothSpots = {}
 
 local function at(x: number, z: number, yawDeg: number?)
 	return CFrame.new(x, 0, z) * CFrame.Angles(0, math.rad(yawDeg or 0), 0)
@@ -38,32 +39,57 @@ local function isFree(x: number, z: number, radius: number)
 	return true
 end
 
-local function scatter(count: number, radius: number, build)
-	local placed = 0
-	for _ = 1, count * 12 do
-		if placed >= count then
-			break
-		end
-		local x, z = rng:NextNumber(-HALF + 10, HALF - 10), rng:NextNumber(-HALF + 10, HALF - 10)
-		if isFree(x, z, radius) then
-			build(at(x, z, rng:NextNumber(0, 360)))
-			reserve(x, z, radius)
-			placed += 1
-		end
-	end
+local terrain = workspace.Terrain
+
+-- Paints a strip of the ground with a terrain material without changing its height.
+local function paintStrip(from: Vector2, to: Vector2, width: number, material: Enum.Material)
+	local a, b = Vector3.new(from.X, -1, from.Y), Vector3.new(to.X, -1, to.Y)
+	terrain:FillBlock(CFrame.lookAt((a + b) / 2, b), Vector3.new(width, 2, (b - a).Magnitude + width), material)
 end
 
-local function path(parent, from: Vector2, to: Vector2, width: number)
-	local a, b = Vector3.new(from.X, 0.05, from.Y), Vector3.new(to.X, 0.05, to.Y)
-	local mid = (a + b) / 2
-	Props.Part({
-		Name = "Path",
-		Size = Vector3.new(width, 0.1, (b - a).Magnitude + width),
-		CFrame = CFrame.lookAt(mid, b),
-		Color = rgb(85, 70, 55),
-		Material = Enum.Material.Ground,
-		CanCollide = false,
-	}, parent)
+local function paintCircle(x: number, z: number, radius: number, material: Enum.Material)
+	terrain:FillCylinder(CFrame.new(x, -1, z), 2, radius, material)
+end
+
+local function path(_, from: Vector2, to: Vector2, width: number)
+	paintStrip(from, to, width, Enum.Material.Mud)
+end
+
+-- Sculpted ground: grass base, worn patches, zone floors, a real water lake, and hills beyond the fence.
+local function buildTerrain()
+	terrain:Clear()
+	terrain:FillBlock(CFrame.new(0, -6, 0), Vector3.new(HALF * 2 + 260, 12, HALF * 2 + 260), Enum.Material.Grass)
+	-- Worn, uneven ground so it isn't one flat color
+	for _ = 1, 70 do
+		local x, z = rng:NextNumber(-HALF, HALF), rng:NextNumber(-HALF, HALF)
+		local material = ({ Enum.Material.LeafyGrass, Enum.Material.Ground, Enum.Material.Mud })[rng:NextInteger(1, 3)]
+		paintCircle(x, z, rng:NextNumber(6, 18), material)
+	end
+	-- Zone floors
+	paintCircle(0, 0, 30, Enum.Material.Cobblestone) -- carousel plaza
+	terrain:FillBlock(CFrame.new(-167, -1, -167), Vector3.new(146, 2, 146), Enum.Material.Ground) -- corn field soil
+	terrain:FillBlock(CFrame.new(170, -1, -170), Vector3.new(140, 2, 140), Enum.Material.Slate) -- junkyard gravel
+	terrain:FillBlock(CFrame.new(-176, -1, 75), Vector3.new(64, 2, 52), Enum.Material.Mud) -- graveyard
+	terrain:FillBlock(CFrame.new(-165, -1, 175), Vector3.new(70, 2, 60), Enum.Material.Ground) -- farmyard
+	paintCircle(150, 0, 36, Enum.Material.Sand) -- circus ring sawdust
+	-- Lake: dig a basin, fill it with water, muddy shore
+	terrain:FillBlock(CFrame.new(175, -4, 175), Vector3.new(88, 8, 68), Enum.Material.Mud)
+	terrain:FillBlock(CFrame.new(175, -3, 175), Vector3.new(80, 6, 60), Enum.Material.Air)
+	terrain:FillBlock(CFrame.new(175, -4, 175), Vector3.new(80, 4, 60), Enum.Material.Water)
+	-- Hills and rock outcrops beyond the fence (leave the two exit corridors open)
+	for i = 0, 47 do
+		local angle = i / 48 * math.pi * 2
+		local dist = HALF + rng:NextNumber(55, 85)
+		local x = math.clamp(math.cos(angle) * dist * 1.25, -HALF - 85, HALF + 85)
+		local z = math.clamp(math.sin(angle) * dist * 1.25, -HALF - 85, HALF + 85)
+		if math.abs(x) > 50 or math.abs(z) < HALF then
+			local material = if rng:NextNumber() < 0.25 then Enum.Material.Rock else Enum.Material.Grass
+			terrain:FillBall(Vector3.new(x, -12, z), rng:NextNumber(38, 52), material)
+		end
+	end
+	pcall(function()
+		terrain.Decoration = true -- animated grass blades
+	end)
 end
 
 local function buildCornMaze(parent)
@@ -190,6 +216,7 @@ local function buildMidway(parent)
 		for _, side in { -1, 1 } do
 			n += 1
 			Props.Booth(at(side * 22, z, if side < 0 then -90 else 90), midway, colors[n % #colors + 1])
+			table.insert(boothSpots, at(side * 22, z, if side < 0 then -90 else 90))
 			reserve(side * 22, z, 8)
 		end
 	end
@@ -197,6 +224,7 @@ local function buildMidway(parent)
 		for _, side in { -1, 1 } do
 			n += 1
 			Props.Booth(at(x, side * 22, if side < 0 then 0 else 180), midway, colors[n % #colors + 1])
+			table.insert(boothSpots, at(x, side * 22, if side < 0 then 0 else 180))
 			reserve(x, side * 22, 8)
 		end
 	end
@@ -302,24 +330,110 @@ local function buildLobby(parent)
 	return origin * CFrame.new(0, 3, 18)
 end
 
+local function tryPlace(x: number, z: number, radius: number, build)
+	if isFree(x, z, radius) then
+		build(at(x, z, rng:NextNumber(0, 360)))
+		reserve(x, z, radius)
+		return true
+	end
+	return false
+end
+
+local function dressMap(map, pumpkinSpots)
+	local dressing = Instance.new("Folder")
+	dressing.Name = "SetDressing"
+	dressing.Parent = map
+
+	-- A line of dead trees just inside the fence
+	for d = -HALF + 20, HALF - 20, 30 do
+		for _, spot in { { d, -HALF + 10 }, { d, HALF - 10 }, { -HALF + 10, d }, { HALF - 10, d } } do
+			if math.abs(spot[1]) > 30 or math.abs(spot[2]) < HALF - 30 then
+				tryPlace(spot[1] + rng:NextNumber(-4, 4), spot[2] + rng:NextNumber(-3, 3), 4, function(cf)
+					Props.DeadTree(cf, dressing)
+				end)
+			end
+		end
+	end
+
+	-- Behind the game booths: supply crates and barrels
+	for i, cf in boothSpots do
+		local back = cf * CFrame.new(if i % 2 == 0 then 8 else -8, 0, 6)
+		local p = back.Position
+		tryPlace(p.X, p.Z, 2.5, function(c)
+			if i % 3 == 0 then
+				Props.CrateStack(c, dressing)
+			else
+				Props.Barrel(c, dressing)
+			end
+		end)
+	end
+
+	-- Every Ritual Pumpkin has an offering pile and a scarecrow keeping watch
+	for i, s in pumpkinSpots do
+		tryPlace(s[1] + 8, s[2] + 5, 3, function(cf)
+			Props.PumpkinPile(cf, dressing)
+		end)
+		if i % 2 == 1 then
+			tryPlace(s[1] - 8, s[2] - 6, 2, function(cf)
+				Props.Scarecrow(cf, dressing)
+			end)
+		end
+	end
+
+	-- Corn field edge: scarecrows facing the midway
+	for z = -225, -110, 38 do
+		tryPlace(-88, z, 2, function(cf)
+			Props.Scarecrow(cf, dressing)
+		end)
+	end
+
+	-- Junkyard: tire stacks and oil barrels between the car piles
+	for _, s in { { 130, -140 }, { 165, -120 }, { 200, -160 }, { 150, -190 }, { 225, -205 }, { 110, -205 }, { 185, -235 } } do
+		tryPlace(s[1], s[2], 3, function(cf)
+			Props.TireStack(cf, dressing)
+		end)
+		tryPlace(s[1] + 5, s[2] + 4, 2, function(cf)
+			Props.Barrel(cf, dressing)
+		end)
+	end
+
+	-- Farm: fenced pumpkin patch, hay stacks along the barn
+	Props.LowFence(Vector3.new(-228, 0, 215), Vector3.new(-170, 0, 215), dressing)
+	Props.LowFence(Vector3.new(-228, 0, 238), Vector3.new(-170, 0, 238), dressing)
+	for i = 0, 3 do
+		tryPlace(-190 + i * 7, 150, 3, function(cf)
+			Props.HayBale(cf, dressing)
+		end)
+	end
+
+	-- Graveyard: dead trees around its edge
+	for _, s in { { -212, 52 }, { -140, 50 }, { -212, 102 }, { -150, 104 } } do
+		tryPlace(s[1], s[2], 3, function(cf)
+			Props.DeadTree(cf, dressing)
+		end)
+	end
+
+	-- Lake shore and the map corners: rock outcrops
+	for _, s in { { 128, 160 }, { 222, 150 }, { 140, 222 }, { -228, -228 }, { 228, 228 }, { -228, 228 } } do
+		tryPlace(s[1], s[2], 6, function(cf)
+			Props.Rocks(cf, dressing)
+		end)
+	end
+end
+
 function MapBuilder.Build()
 	local existing = workspace:FindFirstChild("Baseplate")
 	if existing then
 		existing:Destroy()
 	end
 	table.clear(reserved)
+	table.clear(boothSpots)
 
 	local map = Instance.new("Folder")
 	map.Name = "Map"
 	map.Parent = workspace
 
-	Props.Part({
-		Name = "Ground",
-		Size = Vector3.new(HALF * 2 + 200, 2, HALF * 2 + 200),
-		CFrame = CFrame.new(0, -1, 0),
-		Color = rgb(40, 52, 32),
-		Material = Enum.Material.Grass,
-	}, map)
+	buildTerrain()
 
 	-- Reserve the main paths so clutter doesn't block them
 	for i = -HALF, HALF, 10 do
@@ -440,34 +554,8 @@ function MapBuilder.Build()
 	buildPathsAndLights(map)
 	buildBoundary(map)
 
-	-- Clutter everywhere else
-	local clutter = Instance.new("Folder")
-	clutter.Name = "Clutter"
-	clutter.Parent = map
-	scatter(30, 3, function(cf)
-		Props.HayBale(cf, clutter)
-	end)
-	scatter(22, 4, function(cf)
-		Props.CrateStack(cf, clutter)
-	end)
-	scatter(30, 2.5, function(cf)
-		Props.Barrel(cf, clutter)
-	end)
-	scatter(22, 4, function(cf)
-		Props.PumpkinPile(cf, clutter)
-	end)
-	scatter(14, 3, function(cf)
-		Props.Scarecrow(cf, clutter)
-	end)
-	scatter(35, 4, function(cf)
-		Props.DeadTree(cf, clutter)
-	end)
-	scatter(14, 6, function(cf)
-		Props.Rocks(cf, clutter)
-	end)
-	scatter(12, 3, function(cf)
-		Props.Tombstone(cf, clutter)
-	end)
+	-- Set dressing: every prop is placed on purpose, around the place it belongs to
+	dressMap(map, pumpkinSpots)
 
 	-- Spawns
 	result.SurvivorSpawns = {

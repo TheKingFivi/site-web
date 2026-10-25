@@ -107,7 +107,27 @@ Plus **22 pallet loops**, L-wall loops, 9 Crow Cages, 4 Ghost Bells, 2 exit gate
 
 ---
 
-## 5. Honest notes
+## 5. Music and sounds (original, made for this game)
+
+The `audio/` folder has 11 original sounds composed for Nightmare Fair (no copyrighted music):
+
+| File | Used for |
+|---|---|
+| `lobby_music.ogg` | Lobby: a broken carnival music-box waltz |
+| `ambience.ogg` | During a match: wind, low drone, distant metal creaks |
+| `terror_heartbeat.ogg` | Survivors: heartbeat that grows and speeds up as the killer gets closer |
+| `chase_music.ogg` | Chase music when the killer is right behind you |
+| `sfx_skillcheck.ogg`, `sfx_great.ogg` | Skill check warning and GREAT |
+| `sfx_pumpkin_lit.ogg`, `sfx_gate_alarm.ogg` | A pumpkin is lit / the exit gates get power |
+| `sfx_hit.ogg`, `sfx_pallet.ogg`, `sfx_cage_scream.ogg` | Killer hit, pallet slam, Crow Cage scream (heard in 3D) |
+
+**To turn them on:** Creator Hub → **Development Items → Audio → Import** each file, copy its ID, and paste it into `Config.Sounds` in `Config.luau`. Roblox may limit how many audio files you can upload per month; upload the first four (the music) first.
+
+## 6. Real 3D killer looks
+
+Killers can wear real 3D items from the Roblox Marketplace. Find a mask, coat or hat on roblox.com/catalog, copy the number from the web address, and paste it into `Config.KillerLooks` (for example `Face = "1234567"`). When a killer has items set, the built-in part mask is removed and only the weapon stays. The AI killer uses the Ringmaster's look.
+
+## 7. Honest notes
 
 - The game was checked with a linter and the map builder was run in a Roblox emulator (no crashes, 3,916 parts). It has **not** been playtested inside real Roblox yet, so test a few rounds with friends before advertising.
 - It has **no sounds yet**. Add a heartbeat, chase music, a cage scream and pallet crashes from the Creator Store. Sound matters a lot in horror.
