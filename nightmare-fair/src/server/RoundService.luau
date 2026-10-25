@@ -7,6 +7,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 
+local BotKiller = require(script.Parent.BotKiller)
 local CosmeticService = require(script.Parent.CosmeticService)
 local DataService = require(script.Parent.DataService)
 local KillerService = require(script.Parent.KillerService)
@@ -91,9 +92,11 @@ local function placeAsKiller(player: Player)
 end
 
 local function startMatch(players)
-	local killer = pickKiller(players)
+	-- Alone in the server? The AI Ringmaster hunts you instead of a real player.
+	local solo = #players == 1
+	local killer = if solo then nil else pickKiller(players)
 	Match.Killer = killer
-	Match.KillerType = killerTypeFor(killer)
+	Match.KillerType = if killer then killerTypeFor(killer) else "Ringmaster"
 	Match.Active = true
 	KillerService.Reset()
 	ObjectiveService.Reset()
@@ -121,11 +124,20 @@ local function startMatch(players)
 			placeAsSurvivor(player, spawns[(index - 1) % #spawns + 1])
 		end
 	end
-	workspace:SetAttribute("KillerName", killer.DisplayName)
 	workspace:SetAttribute("KillerType", Match.KillerType)
-	workspace:SetAttribute("SurvivorCount", #players - 1)
-	KillerService.Freeze(10)
+	workspace:SetAttribute("SurvivorCount", if killer then #players - 1 else #players)
 	setPhase("Match", Config.MatchTime)
+	if not killer then
+		workspace:SetAttribute("KillerName", "AI")
+		BotKiller.Start()
+		Remotes.announce(
+			"🤖 Solo hunt: the AI Ringmaster is coming for you! When more players join, one of them becomes the killer.",
+			Config.Killers.Ringmaster.Color
+		)
+		return
+	end
+	workspace:SetAttribute("KillerName", killer.DisplayName)
+	KillerService.Freeze(10)
 	Remotes.announce(
 		"🔪 "
 			.. killer.DisplayName
@@ -149,7 +161,7 @@ local function runMatch(): string
 	while true do
 		task.wait(0.5)
 		local killer = Match.Killer
-		if not killer or not killer.Parent or Match.Role(killer) ~= "Killer" then
+		if not BotKiller.IsActive() and (not killer or not killer.Parent or Match.Role(killer) ~= "Killer") then
 			return "KillerLeft"
 		end
 		if #Match.Survivors() == 0 then
@@ -169,6 +181,7 @@ end
 
 local function endMatch(result: string)
 	Match.Active = false
+	BotKiller.Stop()
 	local escaped, eliminated, total = 0, 0, 0
 	for _, player in Players:GetPlayers() do
 		local role = Match.Role(player)

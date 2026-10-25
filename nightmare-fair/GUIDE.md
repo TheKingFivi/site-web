@@ -7,7 +7,7 @@ An asymmetric horror game for Roblox, in the style of Dead by Daylight, set in a
 
 ## 1. How a match plays
 
-1. **Lobby** (25 s). Everyone waits in the carnival lobby. One player is picked as the **Killer**. Higher **Killer Chance** means better odds, and it goes up by 1 every round you're not the killer.
+1. **Lobby** (25 s). Alone in a server? An **AI Ringmaster** hunts you, so nobody ever waits for players. Everyone waits in the carnival lobby. One player is picked as the **Killer**. Higher **Killer Chance** means better odds, and it goes up by 1 every round you're not the killer.
 2. **The hunt** (7 min). Survivors spawn around the map. The killer spawns in the middle and is frozen for 10 seconds.
 3. **Survivors** light **5 of the 7 Ritual Pumpkins**. Stand next to one, press E, and hit the **skill checks** (press Space when the needle is in the zone). A miss makes noise the killer can see.
 4. **Killer hits:** Healthy → Injured (with a speed boost to get away) → **Downed**.
@@ -98,7 +98,7 @@ Plus **22 pallet loops**, L-wall loops, 9 Crow Cages, 4 Ghost Bells, 2 exit gate
 ## 4. Test and publish
 
 1. Roblox Studio → **File → Open from File** → `NightmareFair.rbxlx`.
-2. The game needs **2+ players**. Use **Test → Clients and Servers → 2 or 3 players → Start**. One of them becomes the killer.
+2. Press **Play** to try it alone: the **AI Ringmaster** hunts you. For the real killer-vs-survivors mode use **Test → Clients and Servers → 2 or 3 players → Start**; one of them becomes the killer.
 3. **Game Settings**: Security → **Enable Studio Access to API Services** (for saving). Places → **Max Players 12**. Genre **Horror**. Fill in the age questionnaire.
 4. **File → Publish to Roblox**, then set it to **Public**.
 

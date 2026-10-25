@@ -11,7 +11,7 @@ Config.AutoSaveInterval = 90
 -- In Studio, pretend the player owns every game pass (handy for testing).
 Config.StudioGrantAllPasses = false
 
-Config.MinPlayers = 2 -- 1 killer + at least 1 survivor
+Config.MinPlayers = 1 -- alone? the AI killer hunts you
 Config.IntermissionTime = 25
 Config.MatchTime = 420 -- 7 minutes
 Config.EndGameCollapse = 120 -- after the gates are powered

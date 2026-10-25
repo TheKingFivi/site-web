@@ -61,10 +61,19 @@ local function showPing(position: Vector3, kind: string?)
 	end)
 end
 
-local function swingEffect(userId: number)
-	local killer = Players:GetPlayerByUserId(userId)
-	local root = killer and killer.Character and killer.Character:FindFirstChild("HumanoidRootPart")
-	if not root or killer:GetAttribute("Vanished") then
+-- `who` is the killer's UserId, or the AI killer's model.
+local function swingEffect(who)
+	local root
+	if typeof(who) == "Instance" then
+		root = who:FindFirstChild("HumanoidRootPart")
+	else
+		local killer = Players:GetPlayerByUserId(who)
+		if killer and killer:GetAttribute("Vanished") then
+			return
+		end
+		root = killer and killer.Character and killer.Character:FindFirstChild("HumanoidRootPart")
+	end
+	if not root then
 		return
 	end
 	local slash = Instance.new("Part")

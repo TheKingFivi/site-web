@@ -23,7 +23,7 @@ Config.AutoSaveInterval = 90
 -- In Studio, pretend the player owns every game pass (handy for testing).
 Config.StudioGrantAllPasses = false
 
-Config.MinPlayers = 2 -- 1 killer + at least 1 survivor
+Config.MinPlayers = 1 -- alone? the AI killer hunts you
 Config.IntermissionTime = 25
 Config.MatchTime = 420 -- 7 minutes
 Config.EndGameCollapse = 120 -- after the gates are powered
@@ -522,6 +522,321 @@ return Remotes
       </Properties>
       <Item class="ModuleScript" referent="8">
         <Properties>
+          <string name="Name">BotKiller</string>
+          <string name="Source"><![CDATA[-- The AI killer: plays The Ringmaster when only one person is in the server, so a solo player can always play.
+-- It hunts the nearest survivor it can see, investigates noises (failed skill checks, lit pumpkins),
+-- downs survivors, carries them to Crow Cages, and can be stunned with pallets.
+local PathfindingService = game:GetService("PathfindingService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.Config)
+local Remotes = require(Shared.Remotes)
+
+local DataService = require(script.Parent.DataService)
+local KillerService = require(script.Parent.KillerService)
+local Match = require(script.Parent.Match)
+local SurvivorService = require(script.Parent.SurvivorService)
+
+local BotKiller = {}
+
+local SPEED = 16.5 -- a little faster than survivors (16), slower than a real killer (18)
+local CARRY_SPEED = 14
+local SIGHT = 75
+local rng = Random.new()
+
+local bot = nil -- { Model, Humanoid, Root, ... }
+
+local function now()
+	return Match.Now()
+end
+
+local function flat(v: Vector3)
+	return Vector3.new(v.X, 0, v.Z)
+end
+
+local function buildBody(spawnCFrame: CFrame)
+	local description = Instance.new("HumanoidDescription")
+	description.HeadColor = Color3.fromRGB(230, 225, 215)
+	description.TorsoColor = Color3.fromRGB(30, 10, 18)
+	description.LeftArmColor = Color3.fromRGB(30, 10, 18)
+	description.RightArmColor = Color3.fromRGB(30, 10, 18)
+	description.LeftLegColor = Color3.fromRGB(20, 15, 20)
+	description.RightLegColor = Color3.fromRGB(20, 15, 20)
+	local model = Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
+	model.Name = "The Ringmaster"
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.WalkSpeed = SPEED
+	humanoid.BreakJointsOnDeath = false
+	model:PivotTo(spawnCFrame)
+	model.Parent = workspace
+	Match.SetCollisionGroup(model, "Players")
+	local root = model:FindFirstChild("HumanoidRootPart")
+	root:SetNetworkOwner(nil) -- the server drives it
+	KillerService.Dress(model, "Ringmaster")
+	CollectionService:AddTag(model, "KillerBot")
+	return model, humanoid, root
+end
+
+local function canSee(from: Vector3, to: Vector3, ignore)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = ignore
+	return workspace:Raycast(from, to - from, params) == nil
+end
+
+local function pickTarget()
+	local best, bestScore = nil, math.huge
+	for _, survivor in Match.Survivors() do
+		local root = Match.Root(survivor)
+		if root and Match.IsStandingSurvivor(survivor) then
+			local distance = (root.Position - bot.Root.Position).Magnitude
+			local visible = distance < 25
+				or (distance < SIGHT and canSee(bot.Root.Position + Vector3.new(0, 2, 0), root.Position, { bot.Model, survivor.Character }))
+			if visible and distance < bestScore then
+				best, bestScore = survivor, distance
+			end
+		end
+	end
+	return best
+end
+
+local function downedSurvivor()
+	local best, bestDistance = nil, math.huge
+	for _, survivor in Match.Survivors() do
+		local root = Match.Root(survivor)
+		if root and Match.Health(survivor) == "Downed" then
+			local distance = (root.Position - bot.Root.Position).Magnitude
+			if distance < bestDistance then
+				best, bestDistance = survivor, distance
+			end
+		end
+	end
+	return best
+end
+
+local function nearestFreeCage()
+	local best, bestDistance = nil, math.huge
+	for _, cage in Match.Map.Cages do
+		if not cage.Occupant then
+			local distance = (cage.Position - bot.Root.Position).Magnitude
+			if distance < bestDistance then
+				best, bestDistance = cage, distance
+			end
+		end
+	end
+	return best
+end
+
+-- Walks toward a goal using pathfinding (recomputed every half second), or straight when close.
+local function moveTo(goal: Vector3)
+	local t = os.clock()
+	if (flat(goal) - flat(bot.Root.Position)).Magnitude < 14 then
+		bot.Humanoid:MoveTo(goal)
+		bot.Path = nil
+		return
+	end
+	if not bot.Path or t - bot.PathTime > 0.5 or (bot.PathGoal - goal).Magnitude > 8 then
+		bot.PathTime = t
+		bot.PathGoal = goal
+		local path = PathfindingService:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = true })
+		local ok = pcall(function()
+			path:ComputeAsync(bot.Root.Position, goal)
+		end)
+		if ok and path.Status == Enum.PathStatus.Success then
+			bot.Path = path:GetWaypoints()
+			bot.PathIndex = 2
+		else
+			bot.Path = nil
+		end
+	end
+	if bot.Path and bot.Path[bot.PathIndex] then
+		local waypoint = bot.Path[bot.PathIndex]
+		if (flat(waypoint.Position) - flat(bot.Root.Position)).Magnitude < 3 then
+			bot.PathIndex += 1
+			waypoint = bot.Path[bot.PathIndex] or waypoint
+		end
+		if waypoint.Action == Enum.PathWaypointAction.Jump then
+			bot.Humanoid.Jump = true
+		end
+		bot.Humanoid:MoveTo(waypoint.Position)
+	else
+		bot.Humanoid:MoveTo(goal)
+	end
+end
+
+local function attack(target: Player)
+	local t = now()
+	if t < bot.AttackReadyAt then
+		return
+	end
+	bot.AttackReadyAt = t + Config.Attack.Cooldown + 0.3
+	Remotes.Swing:FireAllClients(bot.Model)
+	local result = SurvivorService.Hit(target)
+	if result then
+		bot.SlowedUntil = t + Config.Speeds.KillerAfterHitTime
+	end
+end
+
+local function stun(seconds: number)
+	bot.StunnedUntil = now() + seconds
+	local survivor = SurvivorService.CarriedBy(bot)
+	if survivor then
+		SurvivorService.Drop(survivor, "Injured")
+		Remotes.notify(survivor, "You fell free! RUN!", "success")
+	end
+end
+
+local function think()
+	if not bot or not bot.Model.Parent then
+		return
+	end
+	local t = now()
+	local humanoid = bot.Humanoid
+
+	if t < bot.FrozenUntil or t < bot.StunnedUntil then
+		humanoid.WalkSpeed = 0
+		humanoid:MoveTo(bot.Root.Position)
+		return
+	end
+
+	local carrying = SurvivorService.CarriedBy(bot)
+	humanoid.WalkSpeed = if carrying then CARRY_SPEED elseif t < bot.SlowedUntil then Config.Speeds.KillerAfterHit else SPEED
+
+	-- 1. Carrying someone: take them to the nearest empty cage
+	if carrying then
+		local cage = nearestFreeCage()
+		if cage then
+			if (cage.Position - bot.Root.Position).Magnitude < 7 then
+				SurvivorService.CageSurvivor(bot, cage)
+				bot.WanderGoal = nil
+			else
+				moveTo(cage.Position)
+			end
+		end
+		return
+	end
+
+	-- 2. Someone is downed: go pick them up
+	local downed = downedSurvivor()
+	if downed then
+		local root = Match.Root(downed)
+		if root then
+			if (root.Position - bot.Root.Position).Magnitude < 6 then
+				SurvivorService.Pickup(bot, downed)
+			else
+				moveTo(root.Position)
+			end
+			return
+		end
+	end
+
+	-- 3. Chase a survivor it can see
+	local target = pickTarget()
+	if target then
+		bot.LastSeen = Match.Root(target).Position
+		local root = Match.Root(target)
+		if (root.Position - bot.Root.Position).Magnitude < Config.Attack.Range - 1.5 then
+			attack(target)
+		end
+		moveTo(root.Position)
+		return
+	end
+
+	-- 4. Investigate the last sighting or noise, then patrol between unlit pumpkins
+	local goal = bot.LastSeen or bot.Noise
+	if goal and (flat(goal) - flat(bot.Root.Position)).Magnitude < 6 then
+		bot.LastSeen, bot.Noise = nil, nil
+		goal = nil
+	end
+	if not goal then
+		if not bot.WanderGoal or (flat(bot.WanderGoal) - flat(bot.Root.Position)).Magnitude < 8 then
+			local options = {}
+			for _, pumpkin in Match.Map.Pumpkins do
+				if not pumpkin.Lit then
+					table.insert(options, pumpkin.Position)
+				end
+			end
+			for _, gate in Match.Map.Gates do
+				if workspace:GetAttribute("GatesPowered") then
+					table.insert(options, gate.Switch.Position)
+				end
+			end
+			bot.WanderGoal = if #options > 0 then options[rng:NextInteger(1, #options)] else Match.Map.KillerSpawn.Position
+		end
+		goal = bot.WanderGoal
+	end
+	moveTo(goal)
+end
+
+function BotKiller.Start()
+	BotKiller.Stop()
+	local model, humanoid, root = buildBody(Match.Map.KillerSpawn)
+	bot = {
+		Model = model,
+		Humanoid = humanoid,
+		Root = root,
+		AttackReadyAt = 0,
+		SlowedUntil = 0,
+		StunnedUntil = 0,
+		FrozenUntil = now() + 10,
+		PathTime = 0,
+		PathGoal = Vector3.zero,
+	}
+	Match.BotModel = model
+end
+
+function BotKiller.Stop()
+	if bot then
+		local survivor = SurvivorService.CarriedBy(bot)
+		if survivor then
+			SurvivorService.Drop(survivor)
+		end
+		bot.Model:Destroy()
+		bot = nil
+	end
+	Match.BotModel = nil
+end
+
+function BotKiller.IsActive(): boolean
+	return bot ~= nil
+end
+
+function BotKiller.Init()
+	KillerService.OnPalletDropped = function(position: Vector3, survivor: Player)
+		if bot and (bot.Root.Position - position).Magnitude < Config.Pallet.StunRadius then
+			stun(Config.Pallet.StunTime)
+			local earned = DataService.AddTickets(survivor, Config.Rewards.PalletStun, true)
+			Remotes.notify(survivor, "💥 PALLET STUN! +" .. earned .. " 🎟️", "success")
+		end
+	end
+	Match.OnNoise = function(position: Vector3)
+		if bot then
+			bot.Noise = position
+		end
+	end
+	task.spawn(function()
+		while true do
+			task.wait(0.15)
+			if bot and Match.Active then
+				local ok, err = pcall(think)
+				if not ok then
+					warn("[BotKiller] think error:", err)
+				end
+			end
+		end
+	end)
+end
+
+return BotKiller
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
           <string name="Name">CosmeticService</string>
           <string name="Source"><![CDATA[-- Cosmetics: builds hats/masks and trails on characters, sells them for tickets,
 -- opens Mystery Crates and grants Robux bundles.
@@ -656,7 +971,12 @@ local HATS = {
 		attach(
 			f,
 			head,
-			{ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 1.45, 1.45), Color = rgb(150, 255, 90), Material = Enum.Material.Neon },
+			{
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(0.2, 1.45, 1.45),
+				Color = rgb(150, 255, 90),
+				Material = Enum.Material.Neon,
+			},
 			CFrame.new(0, 0.9, 0) * CFrame.Angles(0, 0, math.rad(90))
 		)
 	end,
@@ -711,7 +1031,12 @@ local HATS = {
 		local ring = attach(
 			f,
 			head,
-			{ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.15, 1.6, 1.6), Color = rgb(255, 240, 150), Material = Enum.Material.Neon },
+			{
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(0.15, 1.6, 1.6),
+				Color = rgb(255, 240, 150),
+				Material = Enum.Material.Neon,
+			},
 			CFrame.new(0, 1.4, 0) * CFrame.Angles(0, 0, math.rad(90))
 		)
 		glow(ring, rgb(255, 240, 160), 10)
@@ -903,7 +1228,7 @@ return CosmeticService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="9">
+      <Item class="ModuleScript" referent="10">
         <Properties>
           <string name="Name">DataService</string>
           <string name="Source"><![CDATA[-- Loads/saves player data with retries, session locking and autosave.
@@ -1170,7 +1495,7 @@ return DataService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="10">
+      <Item class="ModuleScript" referent="11">
         <Properties>
           <string name="Name">KillerService</string>
           <string name="Source"><![CDATA[-- The killer: costume, attacks, the three killer powers, pallets and stuns.
@@ -1188,6 +1513,8 @@ local Match = require(script.Parent.Match)
 local SurvivorService = require(script.Parent.SurvivorService)
 
 local KillerService = {}
+KillerService.OnPalletDropped = nil -- set by BotKiller: function(position, survivor)
+KillerService.Dress = nil -- assigned below
 
 local state = {
 	StunnedUntil = 0,
@@ -1235,8 +1562,8 @@ local function newPart(props)
 	return part
 end
 
-local function dressKiller(player: Player, killerType: string)
-	local character = player.Character
+-- Dresses a killer body. `player` (optional) is whose equipped skin to use; the AI killer has none.
+local function dressKiller(character: Model?, killerType: string, player: Player?)
 	local head = character and character:FindFirstChild("Head")
 	local hand = character and (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm"))
 	if not head or not hand then
@@ -1395,7 +1722,7 @@ local function dressKiller(player: Player, killerType: string)
 		)
 	end
 	-- Equipped killer skin recolors the mask and glowing accents
-	local skinId = player:GetAttribute("Skin_" .. killerType)
+	local skinId = player and player:GetAttribute("Skin_" .. killerType)
 	local skin = skinId and player:GetAttribute("Owned_" .. skinId) and Cosmetics.ById[skinId]
 	local accent = if skin then skin.Accent else info.Color
 	if skin then
@@ -1429,6 +1756,8 @@ local function dressKiller(player: Player, killerType: string)
 	reveal.Enabled = false
 	reveal.Parent = character
 end
+
+KillerService.Dress = dressKiller
 
 -- Phantom invisibility ---------------------------------------------------
 
@@ -1689,6 +2018,8 @@ local function setupPallets()
 				KillerService.Stun(Config.Pallet.StunTime, "a pallet")
 				local earned = DataService.AddTickets(survivor, Config.Rewards.PalletStun, true)
 				Remotes.notify(survivor, "💥 PALLET STUN! +" .. earned .. " 🎟️", "success")
+			elseif KillerService.OnPalletDropped then
+				KillerService.OnPalletDropped(spot.Dropped.Position, survivor)
 			end
 		end)
 		spot.BreakPrompt.Triggered:Connect(function(killer)
@@ -1734,12 +2065,12 @@ function KillerService.Setup(player: Player, killerType: string)
 	if character then
 		Match.SetCollisionGroup(character, "Players")
 	end
-	dressKiller(player, killerType)
+	dressKiller(player.Character, killerType, player)
 end
 
 function KillerService.Reveal(seconds: number)
 	local killer = Match.Killer
-	local character = killer and killer.Character
+	local character = if killer then killer.Character else Match.BotModel
 	local highlight = character and character:FindFirstChild("RevealHighlight")
 	if highlight then
 		highlight.Enabled = true
@@ -1828,7 +2159,7 @@ return KillerService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="11">
+      <Item class="Script" referent="12">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -1836,6 +2167,7 @@ return KillerService
 local Players = game:GetService("Players")
 
 local Server = script.Parent
+local BotKiller = require(Server.BotKiller)
 local CosmeticService = require(Server.CosmeticService)
 local DataService = require(Server.DataService)
 local MapBuilder = require(Server.MapBuilder)
@@ -1856,6 +2188,7 @@ KillerService.Init()
 ObjectiveService.Init()
 MonetizationService.Init()
 CosmeticService.Init()
+BotKiller.Init()
 RoundService.Init()
 
 local function onPlayerAdded(player: Player)
@@ -1886,7 +2219,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">MapBuilder</string>
           <string name="Source"><![CDATA[-- Lays out the whole Nightmare Fair map (500 x 500 studs) in themed zones, DBD-style:
@@ -2007,16 +2340,13 @@ local function buildJunkyard(parent)
 		Props.BrokenTeacup(at(s[1], s[2], rng:NextNumber(0, 360)), yard)
 		reserve(s[1], s[2], 7)
 	end
-	local sign = Props.Part(
-		{
-			Name = "JunkSign",
-			Size = Vector3.new(14, 3, 0.5),
-			CFrame = at(100, -100, 45) * CFrame.new(0, 8, 0),
-			Color = rgb(60, 55, 50),
-			Material = Enum.Material.CorrodedMetal,
-		},
-		yard
-	)
+	local sign = Props.Part({
+		Name = "JunkSign",
+		Size = Vector3.new(14, 3, 0.5),
+		CFrame = at(100, -100, 45) * CFrame.new(0, 8, 0),
+		Color = rgb(60, 55, 50),
+		Material = Enum.Material.CorrodedMetal,
+	}, yard)
 	Props.Sign(sign, Enum.NormalId.Front, "RIDE GRAVEYARD", rgb(255, 140, 60))
 	Props.Part(
 		{ Name = "SignPost", Size = Vector3.new(0.6, 7, 0.6), CFrame = at(100, -100) * CFrame.new(0, 3.5, 0), Color = rgb(45, 45, 52) },
@@ -2160,27 +2490,21 @@ end
 local function buildLobby(parent)
 	local lobby = Props.Model("Lobby", parent)
 	local origin = CFrame.new(0, 0, -900)
-	Props.Part(
-		{
-			Name = "Floor",
-			Size = Vector3.new(90, 2, 90),
-			CFrame = origin * CFrame.new(0, -1, 0),
-			Color = rgb(45, 30, 50),
-			Material = Enum.Material.Slate,
-		},
-		lobby
-	)
+	Props.Part({
+		Name = "Floor",
+		Size = Vector3.new(90, 2, 90),
+		CFrame = origin * CFrame.new(0, -1, 0),
+		Color = rgb(45, 30, 50),
+		Material = Enum.Material.Slate,
+	}, lobby)
 	for _, spec in { { 0, -45, 0 }, { 0, 45, 0 }, { -45, 0, 90 }, { 45, 0, 90 } } do
-		Props.Part(
-			{
-				Name = "Wall",
-				Size = Vector3.new(90, 14, 2),
-				CFrame = origin * CFrame.new(spec[1], 7, spec[2]) * CFrame.Angles(0, math.rad(spec[3]), 0),
-				Color = rgb(70, 40, 60),
-				Material = Enum.Material.WoodPlanks,
-			},
-			lobby
-		)
+		Props.Part({
+			Name = "Wall",
+			Size = Vector3.new(90, 14, 2),
+			CFrame = origin * CFrame.new(spec[1], 7, spec[2]) * CFrame.Angles(0, math.rad(spec[3]), 0),
+			Color = rgb(70, 40, 60),
+			Material = Enum.Material.WoodPlanks,
+		}, lobby)
 	end
 	Props.EntranceArch(origin * CFrame.new(0, 0, 30), lobby, "NIGHTMARE FAIR")
 	Props.Carousel(origin * CFrame.new(0, 0, -14), lobby)
@@ -2213,16 +2537,13 @@ function MapBuilder.Build()
 	map.Name = "Map"
 	map.Parent = workspace
 
-	Props.Part(
-		{
-			Name = "Ground",
-			Size = Vector3.new(HALF * 2 + 200, 2, HALF * 2 + 200),
-			CFrame = CFrame.new(0, -1, 0),
-			Color = rgb(40, 52, 32),
-			Material = Enum.Material.Grass,
-		},
-		map
-	)
+	Props.Part({
+		Name = "Ground",
+		Size = Vector3.new(HALF * 2 + 200, 2, HALF * 2 + 200),
+		CFrame = CFrame.new(0, -1, 0),
+		Color = rgb(40, 52, 32),
+		Material = Enum.Material.Grass,
+	}, map)
 
 	-- Reserve the main paths so clutter doesn't block them
 	for i = -HALF, HALF, 10 do
@@ -2391,7 +2712,7 @@ return MapBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">Match</string>
           <string name="Source"><![CDATA[-- Shared state for the current match, plus small helpers every service uses.
@@ -2405,6 +2726,8 @@ Match.Active = false
 Match.Killer = nil :: Player?
 Match.KillerType = nil :: string?
 Match.Map = nil -- result of MapBuilder.Build()
+Match.BotModel = nil :: Model? -- the AI killer's body, in solo games
+Match.OnNoise = nil -- set by BotKiller: function(position) for noises the AI should investigate
 
 function Match.Now(): number
 	return workspace:GetServerTimeNow()
@@ -2505,7 +2828,7 @@ return Match
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">MonetizationService</string>
           <string name="Source"><![CDATA[-- Game passes, developer products, killer unlocks and the lobby killer picker.
@@ -2698,7 +3021,7 @@ return MonetizationService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">ObjectiveService</string>
           <string name="Source"><![CDATA[-- Survivor objectives: light Ritual Pumpkins (with skill checks), power and open the exit gates, escape.
@@ -2783,6 +3106,9 @@ local function lightPumpkin(pumpkin, workers)
 	if Match.Killer then
 		Remotes.Ping:FireClient(Match.Killer, pumpkin.Position, "pumpkin")
 	end
+	if Match.OnNoise then
+		Match.OnNoise(pumpkin.Position)
+	end
 	if count >= Config.Pumpkins.Needed and not workspace:GetAttribute("GatesPowered") then
 		powerGates()
 	else
@@ -2809,6 +3135,9 @@ local function resolveSkillCheck(player: Player, result: string)
 		if Match.Killer then
 			Remotes.Ping:FireClient(Match.Killer, pumpkin.Position, "noise")
 			Remotes.notify(Match.Killer, "💥 A survivor botched a pumpkin!", "info")
+		end
+		if Match.OnNoise then
+			Match.OnNoise(pumpkin.Position)
 		end
 	end
 	setPumpkinVisual(pumpkin)
@@ -3024,7 +3353,7 @@ return ObjectiveService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">Props</string>
           <string name="Source"><![CDATA[-- A library of carnival props, all built from parts so the game needs no uploaded assets.
@@ -3139,16 +3468,13 @@ end
 
 function Props.Crate(cf: CFrame, parent, size: number?)
 	size = size or 4
-	local crate = P(
-		{
-			Name = "Crate",
-			Size = Vector3.one * size,
-			CFrame = cf * CFrame.new(0, size / 2, 0),
-			Color = C.wood,
-			Material = Enum.Material.WoodPlanks,
-		},
-		parent
-	)
+	local crate = P({
+		Name = "Crate",
+		Size = Vector3.one * size,
+		CFrame = cf * CFrame.new(0, size / 2, 0),
+		Color = C.wood,
+		Material = Enum.Material.WoodPlanks,
+	}, parent)
 	return crate
 end
 
@@ -3184,16 +3510,13 @@ function Props.Barrel(cf: CFrame, parent)
 end
 
 function Props.HayBale(cf: CFrame, parent)
-	return P(
-		{
-			Name = "HayBale",
-			Size = Vector3.new(5, 2.6, 3),
-			CFrame = cf * CFrame.new(0, 1.3, 0),
-			Color = rgb(205, 170, 80),
-			Material = Enum.Material.Fabric,
-		},
-		parent
-	)
+	return P({
+		Name = "HayBale",
+		Size = Vector3.new(5, 2.6, 3),
+		CFrame = cf * CFrame.new(0, 1.3, 0),
+		Color = rgb(205, 170, 80),
+		Material = Enum.Material.Fabric,
+	}, parent)
 end
 
 function Props.PumpkinPile(cf: CFrame, parent)
@@ -3209,17 +3532,14 @@ function Props.PumpkinPile(cf: CFrame, parent)
 			CanCollide = false,
 		}, model)
 		if i == 1 then
-			P(
-				{
-					Name = "Face",
-					Size = Vector3.new(s * 0.5, s * 0.25, 0.1),
-					CFrame = p.CFrame * CFrame.new(0, 0, -s * 0.48),
-					Color = rgb(255, 210, 80),
-					Material = Enum.Material.Neon,
-					CanCollide = false,
-				},
-				model
-			)
+			P({
+				Name = "Face",
+				Size = Vector3.new(s * 0.5, s * 0.25, 0.1),
+				CFrame = p.CFrame * CFrame.new(0, 0, -s * 0.48),
+				Color = rgb(255, 210, 80),
+				Material = Enum.Material.Neon,
+				CanCollide = false,
+			}, model)
 			Props.Light(p, rgb(255, 150, 40), 10, 1)
 		end
 	end
@@ -3228,74 +3548,56 @@ end
 
 function Props.Scarecrow(cf: CFrame, parent)
 	local model = Props.Model("Scarecrow", parent)
-	P(
-		{
-			Name = "Pole",
-			Size = Vector3.new(0.5, 9, 0.5),
-			CFrame = cf * CFrame.new(0, 4.5, 0),
-			Color = C.darkWood,
-			Material = Enum.Material.Wood,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Arms",
-			Size = Vector3.new(6, 0.4, 0.4),
-			CFrame = cf * CFrame.new(0, 6.6, 0),
-			Color = C.darkWood,
-			Material = Enum.Material.Wood,
-			CanCollide = false,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Shirt",
-			Size = Vector3.new(2.4, 3, 1.2),
-			CFrame = cf * CFrame.new(0, 5.6, 0),
-			Color = rgb(120, 70, 50),
-			Material = Enum.Material.Fabric,
-			CanCollide = false,
-		},
-		model
-	)
-	local head = P(
-		{
-			Name = "Head",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.one * 2,
-			CFrame = cf * CFrame.new(0, 8.1, 0),
-			Color = rgb(200, 180, 140),
-			Material = Enum.Material.Fabric,
-			CanCollide = false,
-		},
-		model
-	)
+	P({
+		Name = "Pole",
+		Size = Vector3.new(0.5, 9, 0.5),
+		CFrame = cf * CFrame.new(0, 4.5, 0),
+		Color = C.darkWood,
+		Material = Enum.Material.Wood,
+	}, model)
+	P({
+		Name = "Arms",
+		Size = Vector3.new(6, 0.4, 0.4),
+		CFrame = cf * CFrame.new(0, 6.6, 0),
+		Color = C.darkWood,
+		Material = Enum.Material.Wood,
+		CanCollide = false,
+	}, model)
+	P({
+		Name = "Shirt",
+		Size = Vector3.new(2.4, 3, 1.2),
+		CFrame = cf * CFrame.new(0, 5.6, 0),
+		Color = rgb(120, 70, 50),
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+	}, model)
+	local head = P({
+		Name = "Head",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * 2,
+		CFrame = cf * CFrame.new(0, 8.1, 0),
+		Color = rgb(200, 180, 140),
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+	}, model)
 	for _, x in { -0.35, 0.35 } do
-		P(
-			{
-				Name = "Eye",
-				Size = Vector3.new(0.3, 0.3, 0.1),
-				CFrame = head.CFrame * CFrame.new(x, 0.15, -0.95),
-				Color = rgb(255, 40, 40),
-				Material = Enum.Material.Neon,
-				CanCollide = false,
-			},
-			model
-		)
-	end
-	P(
-		{
-			Name = "Hat",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.3, 3.2, 3.2),
-			CFrame = cf * CFrame.new(0, 9, 0) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = rgb(50, 40, 30),
+		P({
+			Name = "Eye",
+			Size = Vector3.new(0.3, 0.3, 0.1),
+			CFrame = head.CFrame * CFrame.new(x, 0.15, -0.95),
+			Color = rgb(255, 40, 40),
+			Material = Enum.Material.Neon,
 			CanCollide = false,
-		},
-		model
-	)
+		}, model)
+	end
+	P({
+		Name = "Hat",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.3, 3.2, 3.2),
+		CFrame = cf * CFrame.new(0, 9, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = rgb(50, 40, 30),
+		CanCollide = false,
+	}, model)
 	return model
 end
 
@@ -3342,38 +3644,29 @@ end
 
 function Props.LampPost(cf: CFrame, parent)
 	local model = Props.Model("LampPost", parent)
-	P(
-		{
-			Name = "Post",
-			Size = Vector3.new(0.7, 13, 0.7),
-			CFrame = cf * CFrame.new(0, 6.5, 0),
-			Color = C.iron,
-			Material = Enum.Material.Metal,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Arm",
-			Size = Vector3.new(0.4, 0.4, 2.5),
-			CFrame = cf * CFrame.new(0, 12.6, -1),
-			Color = C.iron,
-			Material = Enum.Material.Metal,
-			CanCollide = false,
-		},
-		model
-	)
-	local bulb = P(
-		{
-			Name = "Bulb",
-			Size = Vector3.new(1.4, 1.6, 1.4),
-			CFrame = cf * CFrame.new(0, 11.9, -2),
-			Color = rgb(255, 210, 140),
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-		},
-		model
-	)
+	P({
+		Name = "Post",
+		Size = Vector3.new(0.7, 13, 0.7),
+		CFrame = cf * CFrame.new(0, 6.5, 0),
+		Color = C.iron,
+		Material = Enum.Material.Metal,
+	}, model)
+	P({
+		Name = "Arm",
+		Size = Vector3.new(0.4, 0.4, 2.5),
+		CFrame = cf * CFrame.new(0, 12.6, -1),
+		Color = C.iron,
+		Material = Enum.Material.Metal,
+		CanCollide = false,
+	}, model)
+	local bulb = P({
+		Name = "Bulb",
+		Size = Vector3.new(1.4, 1.6, 1.4),
+		CFrame = cf * CFrame.new(0, 11.9, -2),
+		Color = rgb(255, 210, 140),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	}, model)
 	Props.Light(bulb, rgb(255, 190, 120), 26, 1.6)
 	return model
 end
@@ -3386,19 +3679,16 @@ function Props.StringLights(a: Vector3, b: Vector3, parent, count: number?)
 		local t = i / count
 		local sag = math.sin(t * math.pi) * 2.5
 		local pos = a:Lerp(b, t) - Vector3.new(0, sag, 0)
-		local bulb = P(
-			{
-				Name = "Bulb",
-				Shape = Enum.PartType.Ball,
-				Size = Vector3.one * 0.7,
-				Position = pos,
-				Color = colors[i % #colors + 1],
-				Material = Enum.Material.Neon,
-				CanCollide = false,
-				CanQuery = false,
-			},
-			parent
-		)
+		local bulb = P({
+			Name = "Bulb",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 0.7,
+			Position = pos,
+			Color = colors[i % #colors + 1],
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			CanQuery = false,
+		}, parent)
 		if i % 4 == 0 then
 			Props.Light(bulb, bulb.Color, 10, 0.8)
 		end
@@ -3410,28 +3700,22 @@ function Props.Fence(a: Vector3, b: Vector3, parent, height: number?)
 	local mid = (a + b) / 2
 	local length = (b - a).Magnitude
 	local cf = CFrame.lookAt(mid, b) * CFrame.Angles(0, math.rad(90), 0)
-	local wall = P(
-		{
-			Name = "Fence",
-			Size = Vector3.new(length, height, 1.2),
-			CFrame = cf + Vector3.new(0, height / 2, 0),
-			Color = rgb(70, 50, 35),
-			Material = Enum.Material.WoodPlanks,
-		},
-		parent
-	)
+	local wall = P({
+		Name = "Fence",
+		Size = Vector3.new(length, height, 1.2),
+		CFrame = cf + Vector3.new(0, height / 2, 0),
+		Color = rgb(70, 50, 35),
+		Material = Enum.Material.WoodPlanks,
+	}, parent)
 	for i = 0, math.floor(length / 10) do
 		local pos = a:Lerp(b, math.min(1, i * 10 / length))
-		P(
-			{
-				Name = "Post",
-				Size = Vector3.new(1.6, height + 2, 1.6),
-				Position = pos + Vector3.new(0, (height + 2) / 2, 0),
-				Color = rgb(45, 32, 25),
-				Material = Enum.Material.Wood,
-			},
-			parent
-		)
+		P({
+			Name = "Post",
+			Size = Vector3.new(1.6, height + 2, 1.6),
+			Position = pos + Vector3.new(0, (height + 2) / 2, 0),
+			Color = rgb(45, 32, 25),
+			Material = Enum.Material.Wood,
+		}, parent)
 	end
 	return wall
 end
@@ -3445,48 +3729,36 @@ function Props.Booth(cf: CFrame, parent, colorA: Color3?, title: string?)
 	local model = Props.Model("Booth", parent)
 	colorA = colorA or C.red
 	local colorB = C.cream
-	P(
-		{
-			Name = "Floor",
-			Size = Vector3.new(12, 0.6, 8),
-			CFrame = cf * CFrame.new(0, 0.3, 0),
-			Color = C.darkWood,
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Back",
-			Size = Vector3.new(12, 9, 0.6),
-			CFrame = cf * CFrame.new(0, 4.5, 3.7),
-			Color = colorA,
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
+	P({
+		Name = "Floor",
+		Size = Vector3.new(12, 0.6, 8),
+		CFrame = cf * CFrame.new(0, 0.3, 0),
+		Color = C.darkWood,
+		Material = Enum.Material.WoodPlanks,
+	}, model)
+	P({
+		Name = "Back",
+		Size = Vector3.new(12, 9, 0.6),
+		CFrame = cf * CFrame.new(0, 4.5, 3.7),
+		Color = colorA,
+		Material = Enum.Material.WoodPlanks,
+	}, model)
 	for _, x in { -5.7, 5.7 } do
-		P(
-			{
-				Name = "Side",
-				Size = Vector3.new(0.6, 9, 8),
-				CFrame = cf * CFrame.new(x, 4.5, 0),
-				Color = colorB,
-				Material = Enum.Material.WoodPlanks,
-			},
-			model
-		)
-	end
-	P(
-		{
-			Name = "Counter",
-			Size = Vector3.new(11, 3.6, 1.4),
-			CFrame = cf * CFrame.new(0, 1.8, -3.2),
-			Color = colorA,
+		P({
+			Name = "Side",
+			Size = Vector3.new(0.6, 9, 8),
+			CFrame = cf * CFrame.new(x, 4.5, 0),
+			Color = colorB,
 			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
+		}, model)
+	end
+	P({
+		Name = "Counter",
+		Size = Vector3.new(11, 3.6, 1.4),
+		CFrame = cf * CFrame.new(0, 1.8, -3.2),
+		Color = colorA,
+		Material = Enum.Material.WoodPlanks,
+	}, model)
 	P({ Name = "CounterTop", Size = Vector3.new(12, 0.4, 2), CFrame = cf * CFrame.new(0, 3.7, -3.2), Color = C.gold }, model)
 	-- Striped awning
 	for i = 0, 5 do
@@ -3514,17 +3786,14 @@ function Props.Booth(cf: CFrame, parent, colorA: Color3?, title: string?)
 			CanCollide = false,
 		}, model)
 	end
-	local bulbs = P(
-		{
-			Name = "Glow",
-			Size = Vector3.new(11, 0.3, 0.3),
-			CFrame = cf * CFrame.new(0, 8.7, -3.9),
-			Color = rgb(255, 220, 140),
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-		},
-		model
-	)
+	local bulbs = P({
+		Name = "Glow",
+		Size = Vector3.new(11, 0.3, 0.3),
+		CFrame = cf * CFrame.new(0, 8.7, -3.9),
+		Color = rgb(255, 220, 140),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	}, model)
 	Props.Light(bulbs, rgb(255, 200, 120), 16, 1.2)
 	return model
 end
@@ -3532,19 +3801,22 @@ end
 function Props.TicketBooth(cf: CFrame, parent)
 	local model = Props.Model("TicketBooth", parent)
 	P(
-		{ Name = "Body", Size = Vector3.new(7, 8, 7), CFrame = cf * CFrame.new(0, 4, 0), Color = C.red, Material = Enum.Material.WoodPlanks },
-		model
-	)
-	P(
 		{
-			Name = "Window",
-			Size = Vector3.new(4, 3, 0.2),
-			CFrame = cf * CFrame.new(0, 5, -3.55),
-			Color = rgb(255, 200, 90),
-			Material = Enum.Material.Neon,
+			Name = "Body",
+			Size = Vector3.new(7, 8, 7),
+			CFrame = cf * CFrame.new(0, 4, 0),
+			Color = C.red,
+			Material = Enum.Material.WoodPlanks,
 		},
 		model
 	)
+	P({
+		Name = "Window",
+		Size = Vector3.new(4, 3, 0.2),
+		CFrame = cf * CFrame.new(0, 5, -3.55),
+		Color = rgb(255, 200, 90),
+		Material = Enum.Material.Neon,
+	}, model)
 	P({ Name = "Roof", Shape = Enum.PartType.Ball, Size = Vector3.new(9, 9, 9), CFrame = cf * CFrame.new(0, 8, 0), Color = C.gold }, model)
 	local sign = P({ Name = "Sign", Size = Vector3.new(6, 1.6, 0.3), CFrame = cf * CFrame.new(0, 7.2, -3.7), Color = C.purple }, model)
 	Props.Sign(sign, Enum.NormalId.Front, "TICKETS", C.gold)
@@ -3554,40 +3826,31 @@ end
 function Props.PopcornCart(cf: CFrame, parent)
 	local model = Props.Model("PopcornCart", parent)
 	P({ Name = "Cart", Size = Vector3.new(5, 3, 3), CFrame = cf * CFrame.new(0, 2.5, 0), Color = C.red }, model)
-	P(
-		{
-			Name = "Glass",
-			Size = Vector3.new(4.4, 3, 2.6),
-			CFrame = cf * CFrame.new(0, 5.5, 0),
-			Color = rgb(255, 240, 200),
-			Material = Enum.Material.Glass,
-			Transparency = 0.4,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Corn",
-			Size = Vector3.new(4.2, 1.2, 2.4),
-			CFrame = cf * CFrame.new(0, 4.6, 0),
-			Color = rgb(255, 235, 160),
-			Material = Enum.Material.Pebble,
-			CanCollide = false,
-		},
-		model
-	)
+	P({
+		Name = "Glass",
+		Size = Vector3.new(4.4, 3, 2.6),
+		CFrame = cf * CFrame.new(0, 5.5, 0),
+		Color = rgb(255, 240, 200),
+		Material = Enum.Material.Glass,
+		Transparency = 0.4,
+	}, model)
+	P({
+		Name = "Corn",
+		Size = Vector3.new(4.2, 1.2, 2.4),
+		CFrame = cf * CFrame.new(0, 4.6, 0),
+		Color = rgb(255, 235, 160),
+		Material = Enum.Material.Pebble,
+		CanCollide = false,
+	}, model)
 	P({ Name = "Top", Size = Vector3.new(5.4, 0.6, 3.4), CFrame = cf * CFrame.new(0, 7.3, 0), Color = C.red }, model)
 	for _, x in { -2, 2 } do
-		P(
-			{
-				Name = "Wheel",
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(0.4, 2.2, 2.2),
-				CFrame = cf * CFrame.new(x, 1.1, -1.6) * CFrame.Angles(0, math.rad(90), 0),
-				Color = C.iron,
-			},
-			model
-		)
+		P({
+			Name = "Wheel",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.4, 2.2, 2.2),
+			CFrame = cf * CFrame.new(x, 1.1, -1.6) * CFrame.Angles(0, math.rad(90), 0),
+			Color = C.iron,
+		}, model)
 	end
 	return model
 end
@@ -3613,30 +3876,24 @@ function Props.FerrisWheel(cf: CFrame, parent)
 			}, model)
 		end
 	end
-	P(
-		{
-			Name = "Base",
-			Size = Vector3.new(40, 1, 16),
-			CFrame = cf * CFrame.new(0, 0.5, 0),
-			Color = rgb(60, 55, 60),
-			Material = Enum.Material.Concrete,
-		},
-		model
-	)
+	P({
+		Name = "Base",
+		Size = Vector3.new(40, 1, 16),
+		CFrame = cf * CFrame.new(0, 0.5, 0),
+		Color = rgb(60, 55, 60),
+		Material = Enum.Material.Concrete,
+	}, model)
 
 	-- Rotor (spins on the client)
 	local rotor = Props.Model("Rotor", model)
-	local center = P(
-		{
-			Name = "Hub",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(12, 3, 3),
-			CFrame = hub * CFrame.Angles(0, math.rad(90), 0),
-			Color = C.gold,
-			Material = Enum.Material.Metal,
-		},
-		rotor
-	)
+	local center = P({
+		Name = "Hub",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(12, 3, 3),
+		CFrame = hub * CFrame.Angles(0, math.rad(90), 0),
+		Color = C.gold,
+		Material = Enum.Material.Metal,
+	}, rotor)
 	rotor.PrimaryPart = center
 	local segments = 24
 	for side = -1, 1, 2 do
@@ -3660,16 +3917,13 @@ function Props.FerrisWheel(cf: CFrame, parent)
 		local a = i / spokes * math.pi * 2
 		local tip = hub * CFrame.new(math.cos(a) * radius, math.sin(a) * radius, 0)
 		local mid = (hub.Position + tip.Position) / 2
-		P(
-			{
-				Name = "Spoke",
-				Size = Vector3.new(0.5, 0.5, radius),
-				CFrame = CFrame.lookAt(mid, tip.Position),
-				Color = C.cream,
-				Material = Enum.Material.Metal,
-			},
-			rotor
-		)
+		P({
+			Name = "Spoke",
+			Size = Vector3.new(0.5, 0.5, radius),
+			CFrame = CFrame.lookAt(mid, tip.Position),
+			Color = C.cream,
+			Material = Enum.Material.Metal,
+		}, rotor)
 		local cabin = P({
 			Name = "Cabin",
 			Size = Vector3.new(4, 3.4, 4.4),
@@ -3690,41 +3944,32 @@ end
 function Props.Carousel(cf: CFrame, parent)
 	local model = Props.Model("Carousel", parent)
 	local radius = 14
-	P(
-		{
-			Name = "Platform",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(1.2, radius * 2, radius * 2),
-			CFrame = cf * CFrame.new(0, 0.6, 0) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = C.darkWood,
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Pole",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(16, 3, 3),
-			CFrame = cf * CFrame.new(0, 8.6, 0) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = C.gold,
-			Material = Enum.Material.Metal,
-		},
-		model
-	)
+	P({
+		Name = "Platform",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1.2, radius * 2, radius * 2),
+		CFrame = cf * CFrame.new(0, 0.6, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = C.darkWood,
+		Material = Enum.Material.WoodPlanks,
+	}, model)
+	P({
+		Name = "Pole",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(16, 3, 3),
+		CFrame = cf * CFrame.new(0, 8.6, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = C.gold,
+		Material = Enum.Material.Metal,
+	}, model)
 
 	local rotor = Props.Model("Rotor", model)
-	local top = P(
-		{
-			Name = "Crown",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.one * 3,
-			CFrame = cf * CFrame.new(0, 22, 0),
-			Color = C.gold,
-			Material = Enum.Material.Metal,
-		},
-		rotor
-	)
+	local top = P({
+		Name = "Crown",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * 3,
+		CFrame = cf * CFrame.new(0, 22, 0),
+		Color = C.gold,
+		Material = Enum.Material.Metal,
+	}, rotor)
 	rotor.PrimaryPart = top
 	local panels = 16
 	for i = 0, panels - 1 do
@@ -3739,16 +3984,13 @@ function Props.Carousel(cf: CFrame, parent)
 			Color = if i % 2 == 0 then C.red else C.cream,
 			Material = Enum.Material.Fabric,
 		}, rotor)
-		local fringe = P(
-			{
-				Name = "Fringe",
-				Size = Vector3.new(radius * 2 * math.pi / panels, 1.4, 0.3),
-				CFrame = CFrame.lookAt(edge.Position - Vector3.new(0, 0.7, 0), cf.Position + Vector3.new(0, 14.3, 0)),
-				Color = C.gold,
-				Material = Enum.Material.Neon,
-			},
-			rotor
-		)
+		local fringe = P({
+			Name = "Fringe",
+			Size = Vector3.new(radius * 2 * math.pi / panels, 1.4, 0.3),
+			CFrame = CFrame.lookAt(edge.Position - Vector3.new(0, 0.7, 0), cf.Position + Vector3.new(0, 14.3, 0)),
+			Color = C.gold,
+			Material = Enum.Material.Neon,
+		}, rotor)
 		if i % 4 == 0 then
 			Props.Light(fringe, rgb(255, 200, 120), 18, 1)
 		end
@@ -3759,39 +4001,30 @@ function Props.Carousel(cf: CFrame, parent)
 		local spot = cf * CFrame.new(math.cos(a) * (radius - 4), 0, math.sin(a) * (radius - 4))
 		local facing = CFrame.lookAt(spot.Position, spot.Position + Vector3.new(-math.sin(a), 0, math.cos(a)))
 		local height = 4 + (i % 2) * 1.2
-		P(
-			{
-				Name = "HorsePole",
-				Size = Vector3.new(0.4, 14, 0.4),
-				CFrame = facing * CFrame.new(0, 8, 0),
-				Color = C.gold,
-				Material = Enum.Material.Metal,
-			},
-			rotor
-		)
+		P({
+			Name = "HorsePole",
+			Size = Vector3.new(0.4, 14, 0.4),
+			CFrame = facing * CFrame.new(0, 8, 0),
+			Color = C.gold,
+			Material = Enum.Material.Metal,
+		}, rotor)
 		local color = if i % 3 == 0 then rgb(30, 30, 35) elseif i % 3 == 1 then C.cream else rgb(140, 40, 50)
 		P({ Name = "HorseBody", Size = Vector3.new(1.6, 1.8, 4), CFrame = facing * CFrame.new(0, height, 0), Color = color }, rotor)
-		P(
-			{
-				Name = "HorseNeck",
-				Size = Vector3.new(1, 2.2, 1),
-				CFrame = facing * CFrame.new(0, height + 1.5, -1.8) * CFrame.Angles(math.rad(-25), 0, 0),
-				Color = color,
-			},
-			rotor
-		)
+		P({
+			Name = "HorseNeck",
+			Size = Vector3.new(1, 2.2, 1),
+			CFrame = facing * CFrame.new(0, height + 1.5, -1.8) * CFrame.Angles(math.rad(-25), 0, 0),
+			Color = color,
+		}, rotor)
 		P({ Name = "HorseHead", Size = Vector3.new(1, 1, 2), CFrame = facing * CFrame.new(0, height + 2.6, -2.6), Color = color }, rotor)
 		for _, lx in { -0.5, 0.5 } do
 			for _, lz in { -1.5, 1.5 } do
-				P(
-					{
-						Name = "HorseLeg",
-						Size = Vector3.new(0.4, 2, 0.4),
-						CFrame = facing * CFrame.new(lx, height - 1.6, lz) * CFrame.Angles(math.rad(lz * 12), 0, 0),
-						Color = color,
-					},
-					rotor
-				)
+				P({
+					Name = "HorseLeg",
+					Size = Vector3.new(0.4, 2, 0.4),
+					CFrame = facing * CFrame.new(lx, height - 1.6, lz) * CFrame.Angles(math.rad(lz * 12), 0, 0),
+					Color = color,
+				}, rotor)
 			end
 		end
 		P({ Name = "Saddle", Size = Vector3.new(1.8, 0.4, 1.4), CFrame = facing * CFrame.new(0, height + 1, 0.3), Color = C.purple }, rotor)
@@ -3812,27 +4045,21 @@ function Props.CircusTent(cf: CFrame, parent)
 		local face = CFrame.lookAt(edge.Position, cf.Position)
 		local width = radius * 2 * math.pi / panels + 0.6
 		if not isDoor then
-			P(
-				{
-					Name = "Wall",
-					Size = Vector3.new(width, wall, 0.8),
-					CFrame = face * CFrame.new(0, wall / 2, 0),
-					Color = if i % 2 == 0 then C.red else C.cream,
-					Material = Enum.Material.Fabric,
-				},
-				model
-			)
+			P({
+				Name = "Wall",
+				Size = Vector3.new(width, wall, 0.8),
+				CFrame = face * CFrame.new(0, wall / 2, 0),
+				Color = if i % 2 == 0 then C.red else C.cream,
+				Material = Enum.Material.Fabric,
+			}, model)
 		else
-			P(
-				{
-					Name = "DoorTop",
-					Size = Vector3.new(width, 3, 0.8),
-					CFrame = face * CFrame.new(0, wall - 1.5, 0),
-					Color = C.gold,
-					Material = Enum.Material.Fabric,
-				},
-				model
-			)
+			P({
+				Name = "DoorTop",
+				Size = Vector3.new(width, 3, 0.8),
+				CFrame = face * CFrame.new(0, wall - 1.5, 0),
+				Color = C.gold,
+				Material = Enum.Material.Fabric,
+			}, model)
 		end
 		local top = cf * CFrame.new(0, apex, 0)
 		local rim = edge * CFrame.new(0, wall, 0)
@@ -3845,68 +4072,53 @@ function Props.CircusTent(cf: CFrame, parent)
 			Material = Enum.Material.Fabric,
 		}, model)
 	end
-	P(
-		{
-			Name = "CenterPole",
-			Size = Vector3.new(1.4, apex + 6, 1.4),
-			CFrame = cf * CFrame.new(0, (apex + 6) / 2, 0),
-			Color = C.gold,
-			Material = Enum.Material.Metal,
-		},
-		model
-	)
-	local flag = P(
-		{
-			Name = "Flag",
-			Size = Vector3.new(4, 2.4, 0.2),
-			CFrame = cf * CFrame.new(2, apex + 5, 0),
-			Color = C.purple,
-			Material = Enum.Material.Fabric,
-			CanCollide = false,
-		},
-		model
-	)
+	P({
+		Name = "CenterPole",
+		Size = Vector3.new(1.4, apex + 6, 1.4),
+		CFrame = cf * CFrame.new(0, (apex + 6) / 2, 0),
+		Color = C.gold,
+		Material = Enum.Material.Metal,
+	}, model)
+	local flag = P({
+		Name = "Flag",
+		Size = Vector3.new(4, 2.4, 0.2),
+		CFrame = cf * CFrame.new(2, apex + 5, 0),
+		Color = C.purple,
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+	}, model)
 	Props.Sign(flag, Enum.NormalId.Front, "☠", C.gold, Enum.Font.GothamBlack)
 	-- Ring curb and benches inside
 	for i = 0, 23 do
 		local a = i / 24 * math.pi * 2
 		local spot = cf * CFrame.new(math.cos(a) * 13, 0, math.sin(a) * 13)
-		P(
-			{
-				Name = "Curb",
-				Size = Vector3.new(3.6, 1.2, 1),
-				CFrame = CFrame.lookAt(spot.Position, cf.Position) * CFrame.new(0, 0.6, 0),
-				Color = if i % 2 == 0 then C.red else C.gold,
-			},
-			model
-		)
+		P({
+			Name = "Curb",
+			Size = Vector3.new(3.6, 1.2, 1),
+			CFrame = CFrame.lookAt(spot.Position, cf.Position) * CFrame.new(0, 0.6, 0),
+			Color = if i % 2 == 0 then C.red else C.gold,
+		}, model)
 	end
 	for _, a in { 0.8, 2.3, 3.95, 5.45 } do
 		for row = 0, 1 do
 			local spot = cf * CFrame.new(math.cos(a) * (22 + row * 4), 0, math.sin(a) * (22 + row * 4))
-			P(
-				{
-					Name = "Bench",
-					Size = Vector3.new(12, 1.2 + row * 1.4, 2),
-					CFrame = CFrame.lookAt(spot.Position, cf.Position) * CFrame.new(0, 0.6 + row * 0.7, 0),
-					Color = C.wood,
-					Material = Enum.Material.WoodPlanks,
-				},
-				model
-			)
+			P({
+				Name = "Bench",
+				Size = Vector3.new(12, 1.2 + row * 1.4, 2),
+				CFrame = CFrame.lookAt(spot.Position, cf.Position) * CFrame.new(0, 0.6 + row * 0.7, 0),
+				Color = C.wood,
+				Material = Enum.Material.WoodPlanks,
+			}, model)
 		end
 	end
-	local lamp = P(
-		{
-			Name = "Spotlight",
-			Size = Vector3.new(2, 1, 2),
-			CFrame = cf * CFrame.new(0, apex - 6, 0),
-			Color = rgb(255, 230, 180),
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-		},
-		model
-	)
+	local lamp = P({
+		Name = "Spotlight",
+		Size = Vector3.new(2, 1, 2),
+		CFrame = cf * CFrame.new(0, apex - 6, 0),
+		Color = rgb(255, 230, 180),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	}, model)
 	Props.Light(lamp, rgb(255, 210, 160), 45, 1.5)
 	return model
 end
@@ -3918,16 +4130,13 @@ function Props.HauntedManor(cf: CFrame, parent)
 	local function wall(size, offset)
 		return P({ Name = "Wall", Size = size, CFrame = cf * offset, Color = wallColor, Material = Enum.Material.WoodPlanks }, model)
 	end
-	P(
-		{
-			Name = "Floor",
-			Size = Vector3.new(w, 0.6, d),
-			CFrame = cf * CFrame.new(0, 0.3, 0),
-			Color = rgb(50, 35, 30),
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
+	P({
+		Name = "Floor",
+		Size = Vector3.new(w, 0.6, d),
+		CFrame = cf * CFrame.new(0, 0.3, 0),
+		Color = rgb(50, 35, 30),
+		Material = Enum.Material.WoodPlanks,
+	}, model)
 	-- Outer walls with doorways front, back and sides
 	for _, z in { -d / 2, d / 2 } do
 		wall(Vector3.new(w / 2 - 4, h, 1), CFrame.new(-(w / 4 + 2), h / 2, z))
@@ -3954,50 +4163,38 @@ function Props.HauntedManor(cf: CFrame, parent)
 			Material = Enum.Material.Slate,
 		}, model)
 	end
-	P(
-		{
-			Name = "Ceiling",
-			Size = Vector3.new(w, 0.6, d),
-			CFrame = cf * CFrame.new(0, h + 0.3, 0),
-			Color = rgb(40, 30, 35),
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Tower",
-			Size = Vector3.new(8, 14, 8),
-			CFrame = cf * CFrame.new(w / 2 - 6, h + 10, -d / 2 + 6),
-			Color = wallColor,
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
-	P(
-		{
-			Name = "TowerTop",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.one * 9,
-			CFrame = cf * CFrame.new(w / 2 - 6, h + 18, -d / 2 + 6),
-			Color = rgb(30, 22, 30),
-		},
-		model
-	)
+	P({
+		Name = "Ceiling",
+		Size = Vector3.new(w, 0.6, d),
+		CFrame = cf * CFrame.new(0, h + 0.3, 0),
+		Color = rgb(40, 30, 35),
+		Material = Enum.Material.WoodPlanks,
+	}, model)
+	P({
+		Name = "Tower",
+		Size = Vector3.new(8, 14, 8),
+		CFrame = cf * CFrame.new(w / 2 - 6, h + 10, -d / 2 + 6),
+		Color = wallColor,
+		Material = Enum.Material.WoodPlanks,
+	}, model)
+	P({
+		Name = "TowerTop",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * 9,
+		CFrame = cf * CFrame.new(w / 2 - 6, h + 18, -d / 2 + 6),
+		Color = rgb(30, 22, 30),
+	}, model)
 	-- Glowing windows
 	for _, x in { -16, -8, 8, 16 } do
 		for _, z in { -d / 2 - 0.55, d / 2 + 0.55 } do
 			local lit = rng:NextNumber() < 0.6
-			P(
-				{
-					Name = "Window",
-					Size = Vector3.new(3, 4, 0.2),
-					CFrame = cf * CFrame.new(x, 10, z),
-					Color = if lit then rgb(140, 255, 160) else rgb(15, 15, 20),
-					Material = Enum.Material.Neon,
-				},
-				model
-			)
+			P({
+				Name = "Window",
+				Size = Vector3.new(3, 4, 0.2),
+				CFrame = cf * CFrame.new(x, 10, z),
+				Color = if lit then rgb(140, 255, 160) else rgb(15, 15, 20),
+				Material = Enum.Material.Neon,
+			}, model)
 		end
 	end
 	local sign = P(
@@ -4006,17 +4203,14 @@ function Props.HauntedManor(cf: CFrame, parent)
 	)
 	Props.Sign(sign, Enum.NormalId.Front, "HAUNTED MANOR", rgb(140, 255, 160))
 	for _, spot in { CFrame.new(-14, h - 2, -8), CFrame.new(14, h - 2, 8), CFrame.new(0, h - 2, 0) } do
-		local lamp = P(
-			{
-				Name = "Chandelier",
-				Size = Vector3.new(1.4, 1.4, 1.4),
-				CFrame = cf * spot,
-				Color = rgb(140, 255, 160),
-				Material = Enum.Material.Neon,
-				CanCollide = false,
-			},
-			model
-		)
+		local lamp = P({
+			Name = "Chandelier",
+			Size = Vector3.new(1.4, 1.4, 1.4),
+			CFrame = cf * spot,
+			Color = rgb(140, 255, 160),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+		}, model)
 		Props.Light(lamp, rgb(140, 255, 160), 18, 1)
 	end
 	return model
@@ -4026,17 +4220,14 @@ function Props.EntranceArch(cf: CFrame, parent, text: string)
 	local model = Props.Model("Arch", parent)
 	for _, x in { -10, 10 } do
 		P({ Name = "Pillar", Size = Vector3.new(3, 22, 3), CFrame = cf * CFrame.new(x, 11, 0), Color = C.red }, model)
-		local ball = P(
-			{
-				Name = "Topper",
-				Shape = Enum.PartType.Ball,
-				Size = Vector3.one * 3.6,
-				CFrame = cf * CFrame.new(x, 23.6, 0),
-				Color = C.gold,
-				Material = Enum.Material.Neon,
-			},
-			model
-		)
+		local ball = P({
+			Name = "Topper",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.one * 3.6,
+			CFrame = cf * CFrame.new(x, 23.6, 0),
+			Color = C.gold,
+			Material = Enum.Material.Neon,
+		}, model)
 		Props.Light(ball, rgb(255, 200, 100), 22, 1.4)
 	end
 	local board = P({ Name = "Board", Size = Vector3.new(26, 5, 1), CFrame = cf * CFrame.new(0, 19, 0), Color = C.purple }, model)
@@ -4052,16 +4243,13 @@ function Props.CornWall(a: Vector3, b: Vector3, parent)
 	local mid = (a + b) / 2
 	local length = (b - a).Magnitude
 	local cf = CFrame.lookAt(mid, b)
-	local wall = P(
-		{
-			Name = "Corn",
-			Size = Vector3.new(3, 11, length),
-			CFrame = cf + Vector3.new(0, 5.5, 0),
-			Color = rgb(120, 125, 50),
-			Material = Enum.Material.Grass,
-		},
-		parent
-	)
+	local wall = P({
+		Name = "Corn",
+		Size = Vector3.new(3, 11, length),
+		CFrame = cf + Vector3.new(0, 5.5, 0),
+		Color = rgb(120, 125, 50),
+		Material = Enum.Material.Grass,
+	}, parent)
 	for i = 0, math.floor(length / 3) do
 		P({
 			Name = "Tassel",
@@ -4084,72 +4272,57 @@ function Props.Barn(cf: CFrame, parent)
 	local function wall(size, offset)
 		return P({ Name = "Wall", Size = size, CFrame = cf * offset, Color = red, Material = Enum.Material.WoodPlanks }, model)
 	end
-	P(
-		{
-			Name = "Floor",
-			Size = Vector3.new(w, 0.5, d),
-			CFrame = cf * CFrame.new(0, 0.25, 0),
-			Color = rgb(90, 70, 45),
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
+	P({
+		Name = "Floor",
+		Size = Vector3.new(w, 0.5, d),
+		CFrame = cf * CFrame.new(0, 0.25, 0),
+		Color = rgb(90, 70, 45),
+		Material = Enum.Material.WoodPlanks,
+	}, model)
 	for _, z in { -d / 2, d / 2 } do
 		wall(Vector3.new(w / 2 - 6, h, 1), CFrame.new(-(w / 4 + 3), h / 2, z))
 		wall(Vector3.new(w / 2 - 6, h, 1), CFrame.new(w / 4 + 3, h / 2, z))
 		-- Big barn doors, swung open
-		P(
-			{
-				Name = "BarnDoor",
-				Size = Vector3.new(6, 11, 0.6),
-				CFrame = cf * CFrame.new(-9, 5.5, z + (if z < 0 then -3 else 3)) * CFrame.Angles(0, math.rad(80), 0),
-				Color = rgb(150, 45, 35),
-				Material = Enum.Material.WoodPlanks,
-			},
-			model
-		)
+		P({
+			Name = "BarnDoor",
+			Size = Vector3.new(6, 11, 0.6),
+			CFrame = cf * CFrame.new(-9, 5.5, z + (if z < 0 then -3 else 3)) * CFrame.Angles(0, math.rad(80), 0),
+			Color = rgb(150, 45, 35),
+			Material = Enum.Material.WoodPlanks,
+		}, model)
 	end
 	wall(Vector3.new(1, h, d), CFrame.new(-w / 2, h / 2, 0))
 	wall(Vector3.new(1, h, d / 2 - 5), CFrame.new(w / 2, h / 2, -(d / 4 + 2.5)))
 	wall(Vector3.new(1, h, d / 2 - 5), CFrame.new(w / 2, h / 2, d / 4 + 2.5))
 	for _, z in { -1, 1 } do
-		P(
-			{
-				Name = "Roof",
-				Size = Vector3.new(w + 3, 1, d / 2 + 4),
-				CFrame = cf * CFrame.new(0, h + 5, z * d / 4) * CFrame.Angles(z * math.rad(-38), 0, 0),
-				Color = rgb(60, 55, 55),
-				Material = Enum.Material.CorrodedMetal,
-			},
-			model
-		)
+		P({
+			Name = "Roof",
+			Size = Vector3.new(w + 3, 1, d / 2 + 4),
+			CFrame = cf * CFrame.new(0, h + 5, z * d / 4) * CFrame.Angles(z * math.rad(-38), 0, 0),
+			Color = rgb(60, 55, 55),
+			Material = Enum.Material.CorrodedMetal,
+		}, model)
 	end
 	-- Hay loft and bales inside
-	P(
-		{
-			Name = "Loft",
-			Size = Vector3.new(12, 1, d - 2),
-			CFrame = cf * CFrame.new(-w / 2 + 7, 8, 0),
-			Color = rgb(90, 70, 45),
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
+	P({
+		Name = "Loft",
+		Size = Vector3.new(12, 1, d - 2),
+		CFrame = cf * CFrame.new(-w / 2 + 7, 8, 0),
+		Color = rgb(90, 70, 45),
+		Material = Enum.Material.WoodPlanks,
+	}, model)
 	for i = 0, 3 do
 		Props.HayBale(cf * CFrame.new(-w / 2 + 4 + (i % 2) * 6, 0, -6 + i * 4), model)
 	end
 	Props.HayBale(cf * CFrame.new(-w / 2 + 6, 8.5, 2), model)
-	local bulb = P(
-		{
-			Name = "Bulb",
-			Size = Vector3.one,
-			CFrame = cf * CFrame.new(4, h - 1, 0),
-			Color = rgb(255, 210, 140),
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-		},
-		model
-	)
+	local bulb = P({
+		Name = "Bulb",
+		Size = Vector3.one,
+		CFrame = cf * CFrame.new(4, h - 1, 0),
+		Color = rgb(255, 210, 140),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	}, model)
 	Props.Light(bulb, rgb(255, 200, 130), 26, 1)
 	return model
 end
@@ -4158,49 +4331,37 @@ function Props.WreckedCar(cf: CFrame, parent)
 	local model = Props.Model("WreckedCar", parent)
 	local color = Color3.fromHSV(rng:NextNumber(), 0.35, rng:NextNumber(0.3, 0.55))
 	local tilt = cf * CFrame.Angles(math.rad(rng:NextNumber(-6, 6)), 0, math.rad(rng:NextNumber(-8, 8)))
-	P(
-		{
-			Name = "Body",
-			Size = Vector3.new(7, 2.6, 14),
-			CFrame = tilt * CFrame.new(0, 2, 0),
-			Color = color,
-			Material = Enum.Material.CorrodedMetal,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Cabin",
-			Size = Vector3.new(6.4, 2.4, 6.5),
-			CFrame = tilt * CFrame.new(0, 4.4, 1),
-			Color = color,
-			Material = Enum.Material.CorrodedMetal,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Windows",
-			Size = Vector3.new(6.5, 1.6, 6.6),
-			CFrame = tilt * CFrame.new(0, 4.6, 1),
-			Color = rgb(30, 35, 40),
-			Material = Enum.Material.Glass,
-			Transparency = 0.3,
-		},
-		model
-	)
+	P({
+		Name = "Body",
+		Size = Vector3.new(7, 2.6, 14),
+		CFrame = tilt * CFrame.new(0, 2, 0),
+		Color = color,
+		Material = Enum.Material.CorrodedMetal,
+	}, model)
+	P({
+		Name = "Cabin",
+		Size = Vector3.new(6.4, 2.4, 6.5),
+		CFrame = tilt * CFrame.new(0, 4.4, 1),
+		Color = color,
+		Material = Enum.Material.CorrodedMetal,
+	}, model)
+	P({
+		Name = "Windows",
+		Size = Vector3.new(6.5, 1.6, 6.6),
+		CFrame = tilt * CFrame.new(0, 4.6, 1),
+		Color = rgb(30, 35, 40),
+		Material = Enum.Material.Glass,
+		Transparency = 0.3,
+	}, model)
 	for _, x in { -3.4, 3.4 } do
 		for _, z in { -4.5, 4.5 } do
-			P(
-				{
-					Name = "Tire",
-					Shape = Enum.PartType.Cylinder,
-					Size = Vector3.new(1.2, 2.8, 2.8),
-					CFrame = tilt * CFrame.new(x, 1.2, z),
-					Color = rgb(25, 25, 25),
-				},
-				model
-			)
+			P({
+				Name = "Tire",
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(1.2, 2.8, 2.8),
+				CFrame = tilt * CFrame.new(x, 1.2, z),
+				Color = rgb(25, 25, 25),
+			}, model)
 		end
 	end
 	return model
@@ -4227,16 +4388,13 @@ function Props.BrokenTeacup(cf: CFrame, parent)
 		Color = Color3.fromHSV(rng:NextNumber(), 0.5, 0.8),
 		Material = Enum.Material.SmoothPlastic,
 	}, model)
-	P(
-		{
-			Name = "Rim",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.6, 9.6, 9.6),
-			CFrame = cup.CFrame * CFrame.new(3, 0, 0),
-			Color = C.gold,
-		},
-		model
-	)
+	P({
+		Name = "Rim",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.6, 9.6, 9.6),
+		CFrame = cup.CFrame * CFrame.new(3, 0, 0),
+		Color = C.gold,
+	}, model)
 	return model
 end
 
@@ -4244,29 +4402,23 @@ function Props.WaterTower(cf: CFrame, parent)
 	local model = Props.Model("WaterTower", parent)
 	for _, x in { -5, 5 } do
 		for _, z in { -5, 5 } do
-			P(
-				{
-					Name = "Leg",
-					Size = Vector3.new(1.2, 30, 1.2),
-					CFrame = cf * CFrame.new(x, 15, z),
-					Color = C.iron,
-					Material = Enum.Material.Metal,
-				},
-				model
-			)
+			P({
+				Name = "Leg",
+				Size = Vector3.new(1.2, 30, 1.2),
+				CFrame = cf * CFrame.new(x, 15, z),
+				Color = C.iron,
+				Material = Enum.Material.Metal,
+			}, model)
 		end
 	end
-	local tank = P(
-		{
-			Name = "Tank",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(12, 16, 16),
-			CFrame = cf * CFrame.new(0, 36, 0) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = rgb(110, 100, 90),
-			Material = Enum.Material.CorrodedMetal,
-		},
-		model
-	)
+	local tank = P({
+		Name = "Tank",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(12, 16, 16),
+		CFrame = cf * CFrame.new(0, 36, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = rgb(110, 100, 90),
+		Material = Enum.Material.CorrodedMetal,
+	}, model)
 	Props.Sign(
 		P(
 			{ Name = "Paint", Size = Vector3.new(12, 4, 0.2), CFrame = cf * CFrame.new(0, 37, -8.1), Transparency = 1, CanCollide = false },
@@ -4276,68 +4428,53 @@ function Props.WaterTower(cf: CFrame, parent)
 		"NIGHTMARE FAIR",
 		C.red
 	)
-	P(
-		{
-			Name = "Cap",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(17, 8, 17),
-			CFrame = cf * CFrame.new(0, 42, 0),
-			Color = rgb(80, 75, 70),
-			Material = Enum.Material.CorrodedMetal,
-		},
-		model
-	)
-	local beacon = P(
-		{
-			Name = "Beacon",
-			Size = Vector3.one * 1.2,
-			CFrame = cf * CFrame.new(0, 46.5, 0),
-			Color = rgb(255, 40, 40),
-			Material = Enum.Material.Neon,
-		},
-		model
-	)
+	P({
+		Name = "Cap",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(17, 8, 17),
+		CFrame = cf * CFrame.new(0, 42, 0),
+		Color = rgb(80, 75, 70),
+		Material = Enum.Material.CorrodedMetal,
+	}, model)
+	local beacon = P({
+		Name = "Beacon",
+		Size = Vector3.one * 1.2,
+		CFrame = cf * CFrame.new(0, 46.5, 0),
+		Color = rgb(255, 40, 40),
+		Material = Enum.Material.Neon,
+	}, model)
 	Props.Light(beacon, rgb(255, 40, 40), 30, 2)
 	return model, tank
 end
 
 function Props.Lake(cf: CFrame, parent, size: Vector2)
 	local model = Props.Model("Lake", parent)
-	P(
-		{
-			Name = "Water",
-			Size = Vector3.new(size.X, 1, size.Y),
-			CFrame = cf * CFrame.new(0, -0.3, 0),
-			Color = rgb(25, 45, 55),
-			Material = Enum.Material.Glass,
-			Transparency = 0.15,
-			Reflectance = 0.2,
-		},
-		model
-	)
+	P({
+		Name = "Water",
+		Size = Vector3.new(size.X, 1, size.Y),
+		CFrame = cf * CFrame.new(0, -0.3, 0),
+		Color = rgb(25, 45, 55),
+		Material = Enum.Material.Glass,
+		Transparency = 0.15,
+		Reflectance = 0.2,
+	}, model)
 	-- Water is impassable: invisible wall around the edge keeps players on land
 	P({ Name = "Blocker", Size = Vector3.new(size.X - 4, 14, size.Y - 4), CFrame = cf * CFrame.new(0, 7, 0), Transparency = 1 }, model)
 	-- Dock
-	P(
-		{
-			Name = "Dock",
-			Size = Vector3.new(6, 0.8, 24),
-			CFrame = cf * CFrame.new(0, 0.6, -size.Y / 2 - 6),
-			Color = C.wood,
-			Material = Enum.Material.WoodPlanks,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Boat",
-			Size = Vector3.new(5, 1.6, 10),
-			CFrame = cf * CFrame.new(5, 0.3, -size.Y / 2 + 4) * CFrame.Angles(0, 0.3, math.rad(-8)),
-			Color = rgb(90, 60, 40),
-			Material = Enum.Material.Wood,
-		},
-		model
-	)
+	P({
+		Name = "Dock",
+		Size = Vector3.new(6, 0.8, 24),
+		CFrame = cf * CFrame.new(0, 0.6, -size.Y / 2 - 6),
+		Color = C.wood,
+		Material = Enum.Material.WoodPlanks,
+	}, model)
+	P({
+		Name = "Boat",
+		Size = Vector3.new(5, 1.6, 10),
+		CFrame = cf * CFrame.new(5, 0.3, -size.Y / 2 + 4) * CFrame.Angles(0, 0.3, math.rad(-8)),
+		Color = rgb(90, 60, 40),
+		Material = Enum.Material.Wood,
+	}, model)
 	for i = 0, 7 do
 		local a = i / 8 * math.pi * 2
 		P({
@@ -4371,80 +4508,62 @@ end
 
 function Props.Tractor(cf: CFrame, parent)
 	local model = Props.Model("Tractor", parent)
-	P(
-		{
-			Name = "Body",
-			Size = Vector3.new(4, 3, 8),
-			CFrame = cf * CFrame.new(0, 3, 0),
-			Color = rgb(60, 110, 50),
-			Material = Enum.Material.CorrodedMetal,
-		},
-		model
-	)
+	P({
+		Name = "Body",
+		Size = Vector3.new(4, 3, 8),
+		CFrame = cf * CFrame.new(0, 3, 0),
+		Color = rgb(60, 110, 50),
+		Material = Enum.Material.CorrodedMetal,
+	}, model)
 	P({ Name = "Seat", Size = Vector3.new(3, 3, 3), CFrame = cf * CFrame.new(0, 5.5, 2), Color = rgb(40, 40, 40) }, model)
 	P({ Name = "Pipe", Size = Vector3.new(0.6, 3, 0.6), CFrame = cf * CFrame.new(1, 6, -2.5), Color = C.iron }, model)
 	for _, x in { -2.6, 2.6 } do
-		P(
-			{
-				Name = "BigWheel",
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(1.4, 6, 6),
-				CFrame = cf * CFrame.new(x, 3, 2.2),
-				Color = rgb(25, 25, 25),
-			},
-			model
-		)
-		P(
-			{
-				Name = "SmallWheel",
-				Shape = Enum.PartType.Cylinder,
-				Size = Vector3.new(1, 3.4, 3.4),
-				CFrame = cf * CFrame.new(x, 1.7, -3),
-				Color = rgb(25, 25, 25),
-			},
-			model
-		)
+		P({
+			Name = "BigWheel",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1.4, 6, 6),
+			CFrame = cf * CFrame.new(x, 3, 2.2),
+			Color = rgb(25, 25, 25),
+		}, model)
+		P({
+			Name = "SmallWheel",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1, 3.4, 3.4),
+			CFrame = cf * CFrame.new(x, 1.7, -3),
+			Color = rgb(25, 25, 25),
+		}, model)
 	end
 	return model
 end
 
 function Props.Coffin(cf: CFrame, parent)
 	local model = Props.Model("Coffin", parent)
-	P(
-		{
-			Name = "Box",
-			Size = Vector3.new(3, 1.6, 7),
-			CFrame = cf * CFrame.new(0, 0.8, 0),
-			Color = rgb(50, 30, 25),
-			Material = Enum.Material.Wood,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Lid",
-			Size = Vector3.new(3.2, 0.4, 7.2),
-			CFrame = cf * CFrame.new(2, 0.5, 0.4) * CFrame.Angles(0, 0.3, math.rad(-12)),
-			Color = rgb(60, 36, 28),
-			Material = Enum.Material.Wood,
-		},
-		model
-	)
+	P({
+		Name = "Box",
+		Size = Vector3.new(3, 1.6, 7),
+		CFrame = cf * CFrame.new(0, 0.8, 0),
+		Color = rgb(50, 30, 25),
+		Material = Enum.Material.Wood,
+	}, model)
+	P({
+		Name = "Lid",
+		Size = Vector3.new(3.2, 0.4, 7.2),
+		CFrame = cf * CFrame.new(2, 0.5, 0.4) * CFrame.Angles(0, 0.3, math.rad(-12)),
+		Color = rgb(60, 36, 28),
+		Material = Enum.Material.Wood,
+	}, model)
 	return model
 end
 
 function Props.BumperCars(cf: CFrame, parent)
 	local model = Props.Model("BumperCars", parent)
-	P(
-		{
-			Name = "Floor",
-			Size = Vector3.new(40, 0.6, 28),
-			CFrame = cf * CFrame.new(0, 0.3, 0),
-			Color = rgb(50, 50, 60),
-			Material = Enum.Material.DiamondPlate,
-		},
-		model
-	)
+	P({
+		Name = "Floor",
+		Size = Vector3.new(40, 0.6, 28),
+		CFrame = cf * CFrame.new(0, 0.3, 0),
+		Color = rgb(50, 50, 60),
+		Material = Enum.Material.DiamondPlate,
+	}, model)
 	for _, x in { -20, 20 } do
 		P({ Name = "Rail", Size = Vector3.new(0.8, 2, 28), CFrame = cf * CFrame.new(x, 1.3, 0), Color = C.gold }, model)
 	end
@@ -4457,16 +4576,13 @@ function Props.BumperCars(cf: CFrame, parent)
 			P({ Name = "Post", Size = Vector3.new(1, 14, 1), CFrame = cf * CFrame.new(x, 7, z), Color = C.iron }, model)
 		end
 	end
-	P(
-		{
-			Name = "Ceiling",
-			Size = Vector3.new(40, 0.5, 28),
-			CFrame = cf * CFrame.new(0, 14.2, 0),
-			Color = rgb(40, 40, 45),
-			Material = Enum.Material.DiamondPlate,
-		},
-		model
-	)
+	P({
+		Name = "Ceiling",
+		Size = Vector3.new(40, 0.5, 28),
+		CFrame = cf * CFrame.new(0, 14.2, 0),
+		Color = rgb(40, 40, 45),
+		Material = Enum.Material.DiamondPlate,
+	}, model)
 	local sign = P({ Name = "Sign", Size = Vector3.new(20, 3, 0.4), CFrame = cf * CFrame.new(0, 16, -14), Color = C.purple }, model)
 	Props.Sign(sign, Enum.NormalId.Front, "BUMPER SCARS", C.gold)
 	for i = 1, 7 do
@@ -4479,17 +4595,14 @@ function Props.BumperCars(cf: CFrame, parent)
 			model
 		)
 	end
-	local lamp = P(
-		{
-			Name = "Lamp",
-			Size = Vector3.new(2, 0.5, 2),
-			CFrame = cf * CFrame.new(0, 13.7, 0),
-			Color = rgb(150, 180, 255),
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-		},
-		model
-	)
+	local lamp = P({
+		Name = "Lamp",
+		Size = Vector3.new(2, 0.5, 2),
+		CFrame = cf * CFrame.new(0, 13.7, 0),
+		Color = rgb(150, 180, 255),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	}, model)
 	Props.Light(lamp, rgb(150, 180, 255), 30, 1.2)
 	return model
 end
@@ -4514,27 +4627,21 @@ function Props.Shack(cf: CFrame, parent)
 	wall(Vector3.new(1, 3, 16), CFrame.new(8, 8.5, 0))
 	wall(Vector3.new(1, 3.5, 5), CFrame.new(8, 5.25, -5.5))
 	wall(Vector3.new(1, 3.5, 5), CFrame.new(8, 5.25, 5.5))
-	P(
-		{
-			Name = "Roof",
-			Size = Vector3.new(19, 1, 19),
-			CFrame = cf * CFrame.new(0, 10.5, 0) * CFrame.Angles(0, 0, math.rad(6)),
-			Color = rgb(55, 50, 50),
-			Material = Enum.Material.CorrodedMetal,
-		},
-		model
-	)
-	local bulb = P(
-		{
-			Name = "Bulb",
-			Size = Vector3.one * 0.8,
-			CFrame = cf * CFrame.new(0, 9, 0),
-			Color = rgb(255, 220, 160),
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-		},
-		model
-	)
+	P({
+		Name = "Roof",
+		Size = Vector3.new(19, 1, 19),
+		CFrame = cf * CFrame.new(0, 10.5, 0) * CFrame.Angles(0, 0, math.rad(6)),
+		Color = rgb(55, 50, 50),
+		Material = Enum.Material.CorrodedMetal,
+	}, model)
+	local bulb = P({
+		Name = "Bulb",
+		Size = Vector3.one * 0.8,
+		CFrame = cf * CFrame.new(0, 9, 0),
+		Color = rgb(255, 220, 160),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	}, model)
 	Props.Light(bulb, rgb(255, 200, 140), 16, 1)
 	return model
 end
@@ -4544,29 +4651,29 @@ function Props.LWall(cf: CFrame, parent)
 	local model = Props.Model("LWall", parent)
 	local color = rgb(95, 90, 95)
 	P(
-		{ Name = "Wall", Size = Vector3.new(16, 9, 1.4), CFrame = cf * CFrame.new(0, 4.5, 0), Color = color, Material = Enum.Material.Brick },
-		model
-	)
-	P(
 		{
 			Name = "Wall",
-			Size = Vector3.new(1.4, 9, 12),
-			CFrame = cf * CFrame.new(7.3, 4.5, 6.7),
+			Size = Vector3.new(16, 9, 1.4),
+			CFrame = cf * CFrame.new(0, 4.5, 0),
 			Color = color,
 			Material = Enum.Material.Brick,
 		},
 		model
 	)
-	P(
-		{
-			Name = "Rubble",
-			Size = Vector3.new(4, 1.5, 3),
-			CFrame = cf * CFrame.new(-6, 0.75, 2) * CFrame.Angles(0, 0.5, 0.2),
-			Color = color,
-			Material = Enum.Material.Brick,
-		},
-		model
-	)
+	P({
+		Name = "Wall",
+		Size = Vector3.new(1.4, 9, 12),
+		CFrame = cf * CFrame.new(7.3, 4.5, 6.7),
+		Color = color,
+		Material = Enum.Material.Brick,
+	}, model)
+	P({
+		Name = "Rubble",
+		Size = Vector3.new(4, 1.5, 3),
+		CFrame = cf * CFrame.new(-6, 0.75, 2) * CFrame.Angles(0, 0.5, 0.2),
+		Color = color,
+		Material = Enum.Material.Brick,
+	}, model)
 	return model
 end
 
@@ -4576,50 +4683,38 @@ function Props.FortuneTent(cf: CFrame, parent)
 		local a = i / 10 * math.pi * 2
 		if i ~= 0 then
 			local edge = cf * CFrame.new(math.cos(a) * 7, 0, math.sin(a) * 7)
-			P(
-				{
-					Name = "Wall",
-					Size = Vector3.new(4.8, 8, 0.5),
-					CFrame = CFrame.lookAt(edge.Position, cf.Position) * CFrame.new(0, 4, 0),
-					Color = if i % 2 == 0 then C.purple else C.teal,
-					Material = Enum.Material.Fabric,
-				},
-				model
-			)
+			P({
+				Name = "Wall",
+				Size = Vector3.new(4.8, 8, 0.5),
+				CFrame = CFrame.lookAt(edge.Position, cf.Position) * CFrame.new(0, 4, 0),
+				Color = if i % 2 == 0 then C.purple else C.teal,
+				Material = Enum.Material.Fabric,
+			}, model)
 		end
 	end
-	P(
-		{
-			Name = "Roof",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(16, 9, 16),
-			CFrame = cf * CFrame.new(0, 8, 0),
-			Color = C.purple,
-			Material = Enum.Material.Fabric,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Table",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(3, 3, 3),
-			CFrame = cf * CFrame.new(0, 1.5, 0) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = C.darkWood,
-		},
-		model
-	)
-	local ball = P(
-		{
-			Name = "CrystalBall",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.one * 1.4,
-			CFrame = cf * CFrame.new(0, 3.7, 0),
-			Color = rgb(150, 220, 255),
-			Material = Enum.Material.Neon,
-		},
-		model
-	)
+	P({
+		Name = "Roof",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(16, 9, 16),
+		CFrame = cf * CFrame.new(0, 8, 0),
+		Color = C.purple,
+		Material = Enum.Material.Fabric,
+	}, model)
+	P({
+		Name = "Table",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(3, 3, 3),
+		CFrame = cf * CFrame.new(0, 1.5, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = C.darkWood,
+	}, model)
+	local ball = P({
+		Name = "CrystalBall",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * 1.4,
+		CFrame = cf * CFrame.new(0, 3.7, 0),
+		Color = rgb(150, 220, 255),
+		Material = Enum.Material.Neon,
+	}, model)
 	Props.Light(ball, rgb(150, 220, 255), 14, 1.2)
 	return model
 end
@@ -4628,91 +4723,70 @@ end
 
 function Props.RitualPumpkin(cf: CFrame, parent)
 	local model = Props.Model("RitualPumpkin", parent)
-	P(
-		{
-			Name = "Altar",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(1.4, 8, 8),
-			CFrame = cf * CFrame.new(0, 0.7, 0) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = rgb(70, 65, 75),
-			Material = Enum.Material.Slate,
-		},
-		model
-	)
+	P({
+		Name = "Altar",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1.4, 8, 8),
+		CFrame = cf * CFrame.new(0, 0.7, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = rgb(70, 65, 75),
+		Material = Enum.Material.Slate,
+	}, model)
 	for i = 0, 5 do
 		local a = i / 6 * math.pi * 2
-		local candle = P(
-			{
-				Name = "Candle",
-				Size = Vector3.new(0.5, 1.4, 0.5),
-				CFrame = cf * CFrame.new(math.cos(a) * 3.4, 2.1, math.sin(a) * 3.4),
-				Color = C.cream,
-				CanCollide = false,
-			},
-			model
-		)
-		P(
-			{
-				Name = "Wick",
-				Size = Vector3.new(0.25, 0.4, 0.25),
-				CFrame = candle.CFrame * CFrame.new(0, 0.9, 0),
-				Color = rgb(255, 170, 60),
-				Material = Enum.Material.Neon,
-				CanCollide = false,
-			},
-			model
-		)
-	end
-	local pumpkin = P(
-		{
-			Name = "Pumpkin",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(5, 5, 5),
-			CFrame = cf * CFrame.new(0, 3.6, 0),
-			Color = rgb(150, 75, 25),
-		},
-		model
-	)
-	P(
-		{
-			Name = "Stem",
-			Size = Vector3.new(0.6, 1.2, 0.6),
-			CFrame = cf * CFrame.new(0, 6.5, 0),
-			Color = rgb(60, 80, 30),
+		local candle = P({
+			Name = "Candle",
+			Size = Vector3.new(0.5, 1.4, 0.5),
+			CFrame = cf * CFrame.new(math.cos(a) * 3.4, 2.1, math.sin(a) * 3.4),
+			Color = C.cream,
 			CanCollide = false,
-		},
-		model
-	)
+		}, model)
+		P({
+			Name = "Wick",
+			Size = Vector3.new(0.25, 0.4, 0.25),
+			CFrame = candle.CFrame * CFrame.new(0, 0.9, 0),
+			Color = rgb(255, 170, 60),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+		}, model)
+	end
+	local pumpkin = P({
+		Name = "Pumpkin",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(5, 5, 5),
+		CFrame = cf * CFrame.new(0, 3.6, 0),
+		Color = rgb(150, 75, 25),
+	}, model)
+	P({
+		Name = "Stem",
+		Size = Vector3.new(0.6, 1.2, 0.6),
+		CFrame = cf * CFrame.new(0, 6.5, 0),
+		Color = rgb(60, 80, 30),
+		CanCollide = false,
+	}, model)
 	local face = {}
 	for _, x in { -0.9, 0.9 } do
 		table.insert(
 			face,
-			P(
-				{
-					Name = "Eye",
-					Size = Vector3.new(1, 0.9, 0.2),
-					CFrame = pumpkin.CFrame * CFrame.new(x, 0.6, -2.4),
-					Color = rgb(30, 20, 15),
-					Material = Enum.Material.SmoothPlastic,
-					CanCollide = false,
-				},
-				model
-			)
+			P({
+				Name = "Eye",
+				Size = Vector3.new(1, 0.9, 0.2),
+				CFrame = pumpkin.CFrame * CFrame.new(x, 0.6, -2.4),
+				Color = rgb(30, 20, 15),
+				Material = Enum.Material.SmoothPlastic,
+				CanCollide = false,
+			}, model)
 		)
 	end
 	table.insert(
 		face,
-		P(
-			{
-				Name = "Mouth",
-				Size = Vector3.new(2.6, 0.6, 0.2),
-				CFrame = pumpkin.CFrame * CFrame.new(0, -0.8, -2.35),
-				Color = rgb(30, 20, 15),
-				Material = Enum.Material.SmoothPlastic,
-				CanCollide = false,
-			},
-			model
-		)
+		P({
+			Name = "Mouth",
+			Size = Vector3.new(2.6, 0.6, 0.2),
+			CFrame = pumpkin.CFrame * CFrame.new(0, -0.8, -2.35),
+			Color = rgb(30, 20, 15),
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+		}, model)
 	)
 	local light = Props.Light(pumpkin, rgb(255, 150, 40), 30, 0)
 	return { Model = model, Pumpkin = pumpkin, Face = face, Light = light, Position = cf.Position }
@@ -4721,78 +4795,60 @@ end
 function Props.CrowCage(cf: CFrame, parent)
 	local model = Props.Model("CrowCage", parent)
 	local radius, height = 3.6, 9
-	P(
-		{
-			Name = "Base",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(1, radius * 2 + 1, radius * 2 + 1),
-			CFrame = cf * CFrame.new(0, 0.5, 0) * CFrame.Angles(0, 0, math.rad(90)),
-			Color = C.iron,
-			Material = Enum.Material.Metal,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Top",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(radius * 2 + 1, 3, radius * 2 + 1),
-			CFrame = cf * CFrame.new(0, height + 1, 0),
-			Color = C.iron,
-			Material = Enum.Material.Metal,
-		},
-		model
-	)
+	P({
+		Name = "Base",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1, radius * 2 + 1, radius * 2 + 1),
+		CFrame = cf * CFrame.new(0, 0.5, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = C.iron,
+		Material = Enum.Material.Metal,
+	}, model)
+	P({
+		Name = "Top",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(radius * 2 + 1, 3, radius * 2 + 1),
+		CFrame = cf * CFrame.new(0, height + 1, 0),
+		Color = C.iron,
+		Material = Enum.Material.Metal,
+	}, model)
 	for i = 0, 13 do
 		local a = i / 14 * math.pi * 2
 		-- Leave a gap in front so rescuers can reach in
 		if i ~= 0 then
-			P(
-				{
-					Name = "Bar",
-					Size = Vector3.new(0.3, height, 0.3),
-					CFrame = cf * CFrame.new(math.cos(a) * radius, height / 2 + 1, math.sin(a) * radius),
-					Color = rgb(80, 75, 70),
-					Material = Enum.Material.Metal,
-				},
-				model
-			)
+			P({
+				Name = "Bar",
+				Size = Vector3.new(0.3, height, 0.3),
+				CFrame = cf * CFrame.new(math.cos(a) * radius, height / 2 + 1, math.sin(a) * radius),
+				Color = rgb(80, 75, 70),
+				Material = Enum.Material.Metal,
+			}, model)
 		end
 	end
-	P(
-		{
-			Name = "Hook",
-			Size = Vector3.new(0.6, 6, 0.6),
-			CFrame = cf * CFrame.new(0, height + 5, 0),
-			Color = C.iron,
-			Material = Enum.Material.Metal,
-			CanCollide = false,
-		},
-		model
-	)
+	P({
+		Name = "Hook",
+		Size = Vector3.new(0.6, 6, 0.6),
+		CFrame = cf * CFrame.new(0, height + 5, 0),
+		Color = C.iron,
+		Material = Enum.Material.Metal,
+		CanCollide = false,
+	}, model)
 	-- Crows perched on top
 	for _, x in { -1.6, 1.4 } do
-		local crow = P(
-			{
-				Name = "Crow",
-				Size = Vector3.new(0.8, 0.9, 1.6),
-				CFrame = cf * CFrame.new(x, height + 2.8, 0) * CFrame.Angles(0, x, 0),
-				Color = rgb(15, 15, 20),
-				CanCollide = false,
-			},
-			model
-		)
-		P(
-			{
-				Name = "CrowEye",
-				Size = Vector3.new(0.15, 0.15, 0.1),
-				CFrame = crow.CFrame * CFrame.new(0.25, 0.25, -0.8),
-				Color = rgb(255, 40, 40),
-				Material = Enum.Material.Neon,
-				CanCollide = false,
-			},
-			model
-		)
+		local crow = P({
+			Name = "Crow",
+			Size = Vector3.new(0.8, 0.9, 1.6),
+			CFrame = cf * CFrame.new(x, height + 2.8, 0) * CFrame.Angles(0, x, 0),
+			Color = rgb(15, 15, 20),
+			CanCollide = false,
+		}, model)
+		P({
+			Name = "CrowEye",
+			Size = Vector3.new(0.15, 0.15, 0.1),
+			CFrame = crow.CFrame * CFrame.new(0.25, 0.25, -0.8),
+			Color = rgb(255, 40, 40),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+		}, model)
 	end
 	local glow = P(
 		{ Name = "Glow", Size = Vector3.new(0.5, 0.5, 0.5), CFrame = cf * CFrame.new(0, height, 0), Transparency = 1, CanCollide = false },
@@ -4800,16 +4856,13 @@ function Props.CrowCage(cf: CFrame, parent)
 	)
 	local light = Props.Light(glow, rgb(255, 40, 40), 16, 1)
 	-- Invisible part the prompts attach to, at the cage door
-	local door = P(
-		{
-			Name = "DoorZone",
-			Size = Vector3.new(3, 4, 1),
-			CFrame = cf * CFrame.new(radius + 0.5, 3, 0),
-			Transparency = 1,
-			CanCollide = false,
-		},
-		model
-	)
+	local door = P({
+		Name = "DoorZone",
+		Size = Vector3.new(3, 4, 1),
+		CFrame = cf * CFrame.new(radius + 0.5, 3, 0),
+		Transparency = 1,
+		CanCollide = false,
+	}, model)
 	Props.Billboard(door, "🐦‍⬛ CROW CAGE", rgb(255, 90, 90), 4, 40)
 	return { Model = model, Door = door, Light = light, Inside = cf * CFrame.new(0, 4.2, 0), Position = cf.Position }
 end
@@ -4821,78 +4874,60 @@ function Props.PalletSpot(cf: CFrame, parent)
 	Props.CrateStack(cf * CFrame.new(7.4, 0, 0), model)
 	local standing = cf * CFrame.new(-4.2, 3.2, 0) * CFrame.Angles(0, 0, math.rad(-20))
 	local dropped = cf * CFrame.new(0, 3, 0)
-	local pallet = P(
-		{
-			Name = "Pallet",
-			Size = Vector3.new(6.6, 6, 0.8),
-			CFrame = standing,
-			Color = rgb(150, 110, 70),
-			Material = Enum.Material.WoodPlanks,
-			CanCollide = false,
-		},
-		model
-	)
+	local pallet = P({
+		Name = "Pallet",
+		Size = Vector3.new(6.6, 6, 0.8),
+		CFrame = standing,
+		Color = rgb(150, 110, 70),
+		Material = Enum.Material.WoodPlanks,
+		CanCollide = false,
+	}, model)
 	for _, y in { -2, 0, 2 } do
-		P(
-			{
-				Name = "Slat",
-				Size = Vector3.new(6.8, 0.6, 0.3),
-				CFrame = pallet.CFrame * CFrame.new(0, y, -0.5),
-				Color = rgb(110, 80, 50),
-				Material = Enum.Material.Wood,
-				CanCollide = false,
-				CanQuery = false,
-			},
-			model
-		)
+		P({
+			Name = "Slat",
+			Size = Vector3.new(6.8, 0.6, 0.3),
+			CFrame = pallet.CFrame * CFrame.new(0, y, -0.5),
+			Color = rgb(110, 80, 50),
+			Material = Enum.Material.Wood,
+			CanCollide = false,
+			CanQuery = false,
+		}, model)
 	end
 	return { Model = model, Pallet = pallet, Standing = standing, Dropped = dropped, Position = cf.Position }
 end
 
 function Props.Bell(cf: CFrame, parent)
 	local model = Props.Model("GhostBell", parent)
-	P(
-		{
-			Name = "Post",
-			Size = Vector3.new(0.8, 10, 0.8),
-			CFrame = cf * CFrame.new(-2, 5, 0),
-			Color = C.darkWood,
-			Material = Enum.Material.Wood,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Post",
-			Size = Vector3.new(0.8, 10, 0.8),
-			CFrame = cf * CFrame.new(2, 5, 0),
-			Color = C.darkWood,
-			Material = Enum.Material.Wood,
-		},
-		model
-	)
-	P(
-		{
-			Name = "Beam",
-			Size = Vector3.new(5, 0.8, 0.8),
-			CFrame = cf * CFrame.new(0, 10, 0),
-			Color = C.darkWood,
-			Material = Enum.Material.Wood,
-		},
-		model
-	)
-	local bell = P(
-		{
-			Name = "Bell",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.new(2.6, 2.8, 2.6),
-			CFrame = cf * CFrame.new(0, 8.2, 0),
-			Color = rgb(170, 220, 255),
-			Material = Enum.Material.Neon,
-			Transparency = 0.2,
-		},
-		model
-	)
+	P({
+		Name = "Post",
+		Size = Vector3.new(0.8, 10, 0.8),
+		CFrame = cf * CFrame.new(-2, 5, 0),
+		Color = C.darkWood,
+		Material = Enum.Material.Wood,
+	}, model)
+	P({
+		Name = "Post",
+		Size = Vector3.new(0.8, 10, 0.8),
+		CFrame = cf * CFrame.new(2, 5, 0),
+		Color = C.darkWood,
+		Material = Enum.Material.Wood,
+	}, model)
+	P({
+		Name = "Beam",
+		Size = Vector3.new(5, 0.8, 0.8),
+		CFrame = cf * CFrame.new(0, 10, 0),
+		Color = C.darkWood,
+		Material = Enum.Material.Wood,
+	}, model)
+	local bell = P({
+		Name = "Bell",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(2.6, 2.8, 2.6),
+		CFrame = cf * CFrame.new(0, 8.2, 0),
+		Color = rgb(170, 220, 255),
+		Material = Enum.Material.Neon,
+		Transparency = 0.2,
+	}, model)
 	Props.Light(bell, rgb(150, 200, 255), 14, 1)
 	Props.Billboard(bell, "🔔 GHOST BELL", rgb(170, 220, 255), 3, 35)
 	return { Model = model, Bell = bell }
@@ -4901,63 +4936,48 @@ end
 function Props.ExitGate(cf: CFrame, parent)
 	local model = Props.Model("ExitGate", parent)
 	for _, x in { -9.5, 9.5 } do
-		P(
-			{
-				Name = "GatePost",
-				Size = Vector3.new(3, 20, 3),
-				CFrame = cf * CFrame.new(x, 10, 0),
-				Color = C.iron,
-				Material = Enum.Material.Metal,
-			},
-			model
-		)
-	end
-	local top = P(
-		{
-			Name = "GateTop",
-			Size = Vector3.new(22, 3, 3),
-			CFrame = cf * CFrame.new(0, 21.5, 0),
+		P({
+			Name = "GatePost",
+			Size = Vector3.new(3, 20, 3),
+			CFrame = cf * CFrame.new(x, 10, 0),
 			Color = C.iron,
 			Material = Enum.Material.Metal,
-		},
-		model
-	)
+		}, model)
+	end
+	local top = P({
+		Name = "GateTop",
+		Size = Vector3.new(22, 3, 3),
+		CFrame = cf * CFrame.new(0, 21.5, 0),
+		Color = C.iron,
+		Material = Enum.Material.Metal,
+	}, model)
 	Props.Sign(top, Enum.NormalId.Front, "EXIT", rgb(255, 60, 60))
 	local doors = {}
 	for _, x in { -4, 4 } do
-		local door = P(
-			{
-				Name = "Door",
-				Size = Vector3.new(8, 18, 0.8),
-				CFrame = cf * CFrame.new(x, 9, 0),
-				Color = rgb(70, 60, 55),
-				Material = Enum.Material.DiamondPlate,
-			},
-			model
-		)
+		local door = P({
+			Name = "Door",
+			Size = Vector3.new(8, 18, 0.8),
+			CFrame = cf * CFrame.new(x, 9, 0),
+			Color = rgb(70, 60, 55),
+			Material = Enum.Material.DiamondPlate,
+		}, model)
 		table.insert(doors, { Part = door, Closed = door.CFrame, Open = door.CFrame * CFrame.new(x * 1.9, 0, 0) })
 	end
-	local box = P(
-		{
-			Name = "SwitchBox",
-			Size = Vector3.new(2.4, 3.4, 1.4),
-			CFrame = cf * CFrame.new(13, 4, -1.5),
-			Color = rgb(80, 80, 90),
-			Material = Enum.Material.Metal,
-		},
-		model
-	)
-	local lamp = P(
-		{
-			Name = "Lamp",
-			Shape = Enum.PartType.Ball,
-			Size = Vector3.one * 1.2,
-			CFrame = cf * CFrame.new(13, 6.4, -1.5),
-			Color = rgb(255, 40, 40),
-			Material = Enum.Material.Neon,
-		},
-		model
-	)
+	local box = P({
+		Name = "SwitchBox",
+		Size = Vector3.new(2.4, 3.4, 1.4),
+		CFrame = cf * CFrame.new(13, 4, -1.5),
+		Color = rgb(80, 80, 90),
+		Material = Enum.Material.Metal,
+	}, model)
+	local lamp = P({
+		Name = "Lamp",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * 1.2,
+		CFrame = cf * CFrame.new(13, 6.4, -1.5),
+		Color = rgb(255, 40, 40),
+		Material = Enum.Material.Neon,
+	}, model)
 	local light = Props.Light(lamp, rgb(255, 40, 40), 14, 1.5)
 	-- Beyond the gate: the way out
 	local escape = P(
@@ -4971,7 +4991,7 @@ return Props
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">RoundService</string>
           <string name="Source"><![CDATA[-- The round loop: lobby -> pick a killer -> 7-minute match -> results -> back to the lobby.
@@ -4983,6 +5003,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 
+local BotKiller = require(script.Parent.BotKiller)
 local CosmeticService = require(script.Parent.CosmeticService)
 local DataService = require(script.Parent.DataService)
 local KillerService = require(script.Parent.KillerService)
@@ -5067,9 +5088,11 @@ local function placeAsKiller(player: Player)
 end
 
 local function startMatch(players)
-	local killer = pickKiller(players)
+	-- Alone in the server? The AI Ringmaster hunts you instead of a real player.
+	local solo = #players == 1
+	local killer = if solo then nil else pickKiller(players)
 	Match.Killer = killer
-	Match.KillerType = killerTypeFor(killer)
+	Match.KillerType = if killer then killerTypeFor(killer) else "Ringmaster"
 	Match.Active = true
 	KillerService.Reset()
 	ObjectiveService.Reset()
@@ -5097,11 +5120,20 @@ local function startMatch(players)
 			placeAsSurvivor(player, spawns[(index - 1) % #spawns + 1])
 		end
 	end
-	workspace:SetAttribute("KillerName", killer.DisplayName)
 	workspace:SetAttribute("KillerType", Match.KillerType)
-	workspace:SetAttribute("SurvivorCount", #players - 1)
-	KillerService.Freeze(10)
+	workspace:SetAttribute("SurvivorCount", if killer then #players - 1 else #players)
 	setPhase("Match", Config.MatchTime)
+	if not killer then
+		workspace:SetAttribute("KillerName", "AI")
+		BotKiller.Start()
+		Remotes.announce(
+			"🤖 Solo hunt: the AI Ringmaster is coming for you! When more players join, one of them becomes the killer.",
+			Config.Killers.Ringmaster.Color
+		)
+		return
+	end
+	workspace:SetAttribute("KillerName", killer.DisplayName)
+	KillerService.Freeze(10)
 	Remotes.announce(
 		"🔪 "
 			.. killer.DisplayName
@@ -5125,7 +5157,7 @@ local function runMatch(): string
 	while true do
 		task.wait(0.5)
 		local killer = Match.Killer
-		if not killer or not killer.Parent or Match.Role(killer) ~= "Killer" then
+		if not BotKiller.IsActive() and (not killer or not killer.Parent or Match.Role(killer) ~= "Killer") then
 			return "KillerLeft"
 		end
 		if #Match.Survivors() == 0 then
@@ -5145,6 +5177,7 @@ end
 
 local function endMatch(result: string)
 	Match.Active = false
+	BotKiller.Stop()
 	local escaped, eliminated, total = 0, 0, 0
 	for _, player in Players:GetPlayers() do
 		local role = Match.Role(player)
@@ -5285,7 +5318,7 @@ return RoundService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">SurvivorService</string>
           <string name="Source"><![CDATA[-- Survivors: health states, healing, being carried, Crow Cages, rescues, elimination, escape and ghosts.
@@ -5308,6 +5341,18 @@ local boostToken = {}
 
 local function now()
 	return Match.Now()
+end
+
+-- The carrier is either the killer Player or the AI killer (a table with a Root part).
+local function isPlayer(carrier): boolean
+	return typeof(carrier) == "Instance" and carrier:IsA("Player")
+end
+
+local function carrierRoot(carrier): BasePart?
+	if isPlayer(carrier) then
+		return Match.Root(carrier)
+	end
+	return carrier and carrier.Root
 end
 
 local function prompt(player: Player, name: string)
@@ -5463,7 +5508,7 @@ function SurvivorService.Pickup(killer: Player, survivor: Player)
 	if SurvivorService.CarriedBy(killer) then
 		return
 	end
-	local killerRoot, root = Match.Root(killer), Match.Root(survivor)
+	local killerRoot, root = carrierRoot(killer), Match.Root(survivor)
 	if not killerRoot or not root or (killerRoot.Position - root.Position).Magnitude > 10 then
 		return
 	end
@@ -5477,7 +5522,9 @@ function SurvivorService.Pickup(killer: Player, survivor: Player)
 	carried[survivor] = { Killer = killer, Weld = weld, EndsAt = now() + Config.Cage.WiggleTime, Saved = saved }
 	survivor:SetAttribute("WiggleEndsAt", now() + Config.Cage.WiggleTime)
 	Remotes.notify(survivor, "😱 You're being carried! You'll wiggle free in " .. Config.Cage.WiggleTime .. "s...", "error")
-	Remotes.notify(killer, "Bring them to a 🐦‍⬛ Crow Cage!", "info")
+	if isPlayer(killer) then
+		Remotes.notify(killer, "Bring them to a 🐦‍⬛ Crow Cage!", "info")
+	end
 	if SurvivorService.OnCarryChanged then
 		SurvivorService.OnCarryChanged(killer)
 	end
@@ -5493,7 +5540,7 @@ function SurvivorService.Drop(survivor: Player, newHealth: string?)
 	info.Weld:Destroy()
 	setCarryPhysics(survivor, false, info.Saved)
 	survivor:SetAttribute("WiggleEndsAt", nil)
-	local root, killerRoot = Match.Root(survivor), Match.Root(info.Killer)
+	local root, killerRoot = Match.Root(survivor), carrierRoot(info.Killer)
 	if root then
 		if killerRoot then
 			root.CFrame = killerRoot.CFrame * CFrame.new(0, 0, 3)
@@ -5611,8 +5658,10 @@ function SurvivorService.CageSurvivor(killer: Player, cage)
 	SurvivorService.SetHealth(survivor, "Caged")
 	cage.Light.Color = Color3.fromRGB(255, 200, 60)
 
-	local earned = DataService.AddTickets(killer, Config.Rewards.KillerCage, true)
-	Remotes.notify(killer, "🐦‍⬛ Caged " .. survivor.DisplayName .. "! +" .. earned .. " 🎟️", "success")
+	if isPlayer(killer) then
+		local earned = DataService.AddTickets(killer, Config.Rewards.KillerCage, true)
+		Remotes.notify(killer, "🐦‍⬛ Caged " .. survivor.DisplayName .. "! +" .. earned .. " 🎟️", "success")
+	end
 	if count > #Config.Cage.Stages then
 		SurvivorService.Eliminate(survivor, "caged 3 times")
 		return
@@ -5716,7 +5765,7 @@ local function tick()
 			local killer = info.Killer
 			SurvivorService.Drop(survivor, "Injured")
 			Remotes.notify(survivor, "💪 You wiggled free!", "success")
-			if killer then
+			if isPlayer(killer) then
 				Remotes.notify(killer, "They wiggled free!", "error")
 			end
 		end
@@ -5748,19 +5797,19 @@ return SurvivorService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="19">
+  <Item class="StarterPlayer" referent="20">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="20">
+    <Item class="StarterPlayerScripts" referent="21">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="21">
+      <Item class="Folder" referent="22">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">Controls</string>
             <string name="Source"><![CDATA[-- Killer input: click / ATTACK button to swing, Q / POWER button for the killer's power.
@@ -5834,7 +5883,7 @@ return Controls
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- World effects: spinning rides, role-based prompt visibility, killer swing trails,
@@ -5900,10 +5949,19 @@ local function showPing(position: Vector3, kind: string?)
 	end)
 end
 
-local function swingEffect(userId: number)
-	local killer = Players:GetPlayerByUserId(userId)
-	local root = killer and killer.Character and killer.Character:FindFirstChild("HumanoidRootPart")
-	if not root or killer:GetAttribute("Vanished") then
+-- `who` is the killer's UserId, or the AI killer's model.
+local function swingEffect(who)
+	local root
+	if typeof(who) == "Instance" then
+		root = who:FindFirstChild("HumanoidRootPart")
+	else
+		local killer = Players:GetPlayerByUserId(who)
+		if killer and killer:GetAttribute("Vanished") then
+			return
+		end
+		root = killer and killer.Character and killer.Character:FindFirstChild("HumanoidRootPart")
+	end
+	if not root then
 		return
 	end
 	local slash = Instance.new("Part")
@@ -5964,12 +6022,13 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">HUD</string>
             <string name="Source"><![CDATA[-- All on-screen UI, built from code.
 -- Lobby: killer picker, wardrobe, shop (bundles, Mystery Crate, passes, boosts).
 -- Match: timer, pumpkins, survivor states, skill checks, heartbeat, cage/carry screens, killer power.
+local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -6062,52 +6121,38 @@ local function invoke(remote: RemoteFunction, ...)
 end
 
 function HUD.Start()
-	local gui = new(
-		"ScreenGui",
-		{
-			Name = "FairHUD",
-			ResetOnSpawn = false,
-			IgnoreGuiInset = true,
-			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-			Parent = player:WaitForChild("PlayerGui"),
-		}
-	)
+	local gui = new("ScreenGui", {
+		Name = "FairHUD",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = player:WaitForChild("PlayerGui"),
+	})
 
 	------------------------------------------------------------------ toasts / announcements
-	local toastHolder = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -150),
-			Size = UDim2.fromOffset(440, 220),
-			BackgroundTransparency = 1,
-			Parent = gui,
-		},
-		{
-			new(
-				"UIListLayout",
-				{
-					VerticalAlignment = Enum.VerticalAlignment.Bottom,
-					HorizontalAlignment = Enum.HorizontalAlignment.Center,
-					Padding = UDim.new(0, 6),
-					SortOrder = Enum.SortOrder.LayoutOrder,
-				}
-			),
-		}
-	)
+	local toastHolder = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -150),
+		Size = UDim2.fromOffset(440, 220),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, {
+		new("UIListLayout", {
+			VerticalAlignment = Enum.VerticalAlignment.Bottom,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 6),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
 	local toastCount = 0
 	local function toast(message: string, kind: string?)
 		toastCount += 1
-		local frame = new(
-			"Frame",
-			{
-				Size = UDim2.new(1, 0, 0, 34),
-				BackgroundColor3 = TOAST[kind or "info"] or TOAST.info,
-				LayoutOrder = toastCount,
-				Parent = toastHolder,
-			},
-			{ corner(8) }
-		)
+		local frame = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 34),
+			BackgroundColor3 = TOAST[kind or "info"] or TOAST.info,
+			LayoutOrder = toastCount,
+			Parent = toastHolder,
+		}, { corner(8) })
 		text({ Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), Text = message, Parent = frame })
 		task.delay(3.5, function()
 			TweenService:Create(frame, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
@@ -6167,18 +6212,14 @@ function HUD.Start()
 	do
 		table.insert(
 			edges,
-			new(
-				"Frame",
-				{
-					Size = spec[1],
-					Position = spec[2],
-					BackgroundColor3 = C.red,
-					BorderSizePixel = 0,
-					BackgroundTransparency = 1,
-					Parent = vignette,
-				},
-				{ new("UIGradient", { Rotation = spec[3], Transparency = NumberSequence.new(0, 1) }) }
-			)
+			new("Frame", {
+				Size = spec[1],
+				Position = spec[2],
+				BackgroundColor3 = C.red,
+				BorderSizePixel = 0,
+				BackgroundTransparency = 1,
+				Parent = vignette,
+			}, { new("UIGradient", { Rotation = spec[3], Transparency = NumberSequence.new(0, 1) }) })
 		)
 	end
 	local flash =
@@ -6200,18 +6241,14 @@ function HUD.Start()
 	end)
 
 	------------------------------------------------------------------ top bar
-	local top = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 44),
-			Size = UDim2.fromOffset(340, 96),
-			BackgroundColor3 = C.panel,
-			BackgroundTransparency = 0.2,
-			Parent = gui,
-		},
-		{ corner(12), border(C.red) }
-	)
+	local top = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 44),
+		Size = UDim2.fromOffset(340, 96),
+		BackgroundColor3 = C.panel,
+		BackgroundTransparency = 0.2,
+		Parent = gui,
+	}, { corner(12), border(C.red) })
 	local titleLabel = text({
 		Size = UDim2.new(1, -16, 0, 40),
 		Position = UDim2.fromOffset(8, 4),
@@ -6235,42 +6272,31 @@ function HUD.Start()
 	})
 
 	-- Survivor list (right side)
-	local roster = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -12, 0, 150),
-			Size = UDim2.fromOffset(220, 260),
-			BackgroundTransparency = 1,
-			Parent = gui,
-		},
-		{
-			new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.Name }),
-		}
-	)
+	local roster = new("Frame", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 150),
+		Size = UDim2.fromOffset(220, 260),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, {
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.Name }),
+	})
 
 	------------------------------------------------------------------ survivor widgets
-	local center = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -40),
-			Size = UDim2.fromOffset(380, 100),
-			BackgroundTransparency = 1,
-			Parent = gui,
-		}
-	)
-	local workFrame = new(
-		"Frame",
-		{
-			Position = UDim2.fromOffset(0, 70),
-			Size = UDim2.new(1, 0, 0, 24),
-			BackgroundColor3 = Color3.fromRGB(15, 10, 15),
-			Visible = false,
-			Parent = center,
-		},
-		{ corner(6), border(C.grey) }
-	)
+	local center = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -40),
+		Size = UDim2.fromOffset(380, 100),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	local workFrame = new("Frame", {
+		Position = UDim2.fromOffset(0, 70),
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundColor3 = Color3.fromRGB(15, 10, 15),
+		Visible = false,
+		Parent = center,
+	}, { corner(6), border(C.grey) })
 	local workFill = new(
 		"Frame",
 		{ Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(255, 140, 30), Parent = workFrame },
@@ -6283,16 +6309,12 @@ function HUD.Start()
 		"Frame",
 		{ Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 60), BackgroundTransparency = 1, Visible = false, Parent = center }
 	)
-	local track = new(
-		"Frame",
-		{
-			Position = UDim2.fromOffset(0, 26),
-			Size = UDim2.new(1, -90, 0, 26),
-			BackgroundColor3 = Color3.fromRGB(20, 12, 20),
-			Parent = skill,
-		},
-		{ corner(6), border(C.bone) }
-	)
+	local track = new("Frame", {
+		Position = UDim2.fromOffset(0, 26),
+		Size = UDim2.new(1, -90, 0, 26),
+		BackgroundColor3 = Color3.fromRGB(20, 12, 20),
+		Parent = skill,
+	}, { corner(6), border(C.bone) })
 	local goodZone = new(
 		"Frame",
 		{ Size = UDim2.fromScale(0.14, 1), BackgroundColor3 = Color3.fromRGB(240, 232, 220), BackgroundTransparency = 0.3, Parent = track }
@@ -6383,27 +6405,20 @@ function HUD.Start()
 		Visible = false,
 		Parent = gui,
 	})
-	local cageButtons = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0.36, 64),
-			Size = UDim2.fromOffset(420, 46),
-			BackgroundTransparency = 1,
-			Visible = false,
-			Parent = gui,
-		},
-		{
-			new(
-				"UIListLayout",
-				{
-					FillDirection = Enum.FillDirection.Horizontal,
-					HorizontalAlignment = Enum.HorizontalAlignment.Center,
-					Padding = UDim.new(0, 10),
-				}
-			),
-		}
-	)
+	local cageButtons = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0.36, 64),
+		Size = UDim2.fromOffset(420, 46),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = gui,
+	}, {
+		new("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 10),
+		}),
+	})
 	local useBreakOut = button({ Size = UDim2.fromOffset(200, 44), Text = "🗝️ USE BREAK OUT", Parent = cageButtons }, C.gold)
 	local buyBreakOut = button(
 		{ Size = UDim2.fromOffset(200, 44), Text = "🗝️ BREAK OUT  R$ " .. Config.Products.SelfRescue.Price, Parent = cageButtons },
@@ -6430,19 +6445,15 @@ function HUD.Start()
 	end)
 
 	-- Killer power widget
-	local power = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -30),
-			Size = UDim2.fromOffset(360, 60),
-			BackgroundColor3 = C.panel,
-			BackgroundTransparency = 0.2,
-			Visible = false,
-			Parent = gui,
-		},
-		{ corner(10), border(C.red) }
-	)
+	local power = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -30),
+		Size = UDim2.fromOffset(360, 60),
+		BackgroundColor3 = C.panel,
+		BackgroundTransparency = 0.2,
+		Visible = false,
+		Parent = gui,
+	}, { corner(10), border(C.red) })
 	local powerLabel = text({ Size = UDim2.new(1, -16, 0, 28), Position = UDim2.fromOffset(8, 4), Text = "", Parent = power })
 	local attackLabel =
 		text({ Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, 32), Text = "", TextColor3 = C.dim, Parent = power })
@@ -6450,20 +6461,16 @@ function HUD.Start()
 	------------------------------------------------------------------ lobby panels
 	local panels = {}
 	local function makePanel(name: string, title: string, size: Vector2)
-		local panel = new(
-			"Frame",
-			{
-				Name = name,
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.55),
-				Size = UDim2.fromOffset(size.X, size.Y),
-				BackgroundColor3 = C.panel,
-				Visible = false,
-				ZIndex = 10,
-				Parent = gui,
-			},
-			{ corner(14), border(C.red, 3) }
-		)
+		local panel = new("Frame", {
+			Name = name,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.55),
+			Size = UDim2.fromOffset(size.X, size.Y),
+			BackgroundColor3 = C.panel,
+			Visible = false,
+			ZIndex = 10,
+			Parent = gui,
+		}, { corner(14), border(C.red, 3) })
 		text({
 			Size = UDim2.new(1, -80, 0, 40),
 			Position = UDim2.fromOffset(16, 8),
@@ -6477,22 +6484,18 @@ function HUD.Start()
 		close.Activated:Connect(function()
 			panel.Visible = false
 		end)
-		local scroll = new(
-			"ScrollingFrame",
-			{
-				Position = UDim2.fromOffset(12, 56),
-				Size = UDim2.new(1, -24, 1, -68),
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				CanvasSize = UDim2.new(),
-				AutomaticCanvasSize = Enum.AutomaticSize.Y,
-				ScrollBarThickness = 6,
-				Parent = panel,
-			},
-			{
-				new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
-			}
-		)
+		local scroll = new("ScrollingFrame", {
+			Position = UDim2.fromOffset(12, 56),
+			Size = UDim2.new(1, -24, 1, -68),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			CanvasSize = UDim2.new(),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 6,
+			Parent = panel,
+		}, {
+			new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		})
 		panels[name] = panel
 		return panel, scroll
 	end
@@ -6723,19 +6726,15 @@ function HUD.Start()
 	end
 
 	-- Lobby buttons
-	local side = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 12, 0.5, 0),
-			Size = UDim2.fromOffset(150, 190),
-			BackgroundTransparency = 1,
-			Parent = gui,
-		},
-		{
-			new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
-		}
-	)
+	local side = new("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 12, 0.5, 0),
+		Size = UDim2.fromOffset(150, 190),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, {
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
 	local killersButton = button({ Size = UDim2.fromOffset(150, 52), Text = "🔪 KILLERS", LayoutOrder = 1, Parent = side }, C.red)
 	local wardrobeButton = button({ Size = UDim2.fromOffset(150, 52), Text = "🎭 WARDROBE", LayoutOrder = 2, Parent = side }, C.purple)
 	local shopButton = button({ Size = UDim2.fromOffset(150, 52), Text = "🛒 SHOP", LayoutOrder = 3, Parent = side }, C.gold)
@@ -6777,6 +6776,12 @@ function HUD.Start()
 					if root and myRoot then
 						danger = math.clamp(1 - (root.Position - myRoot.Position).Magnitude / 60, 0, 1)
 					end
+				end
+			end
+			for _, bot in CollectionService:GetTagged("KillerBot") do
+				local root = bot:FindFirstChild("HumanoidRootPart")
+				if root and myRoot then
+					danger = math.max(danger, math.clamp(1 - (root.Position - myRoot.Position).Magnitude / 60, 0, 1))
 				end
 			end
 		end
@@ -6957,7 +6962,7 @@ return HUD
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="25">
+        <Item class="LocalScript" referent="26">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[-- Client entry point.

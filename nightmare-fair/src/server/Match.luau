@@ -9,6 +9,8 @@ Match.Active = false
 Match.Killer = nil :: Player?
 Match.KillerType = nil :: string?
 Match.Map = nil -- result of MapBuilder.Build()
+Match.BotModel = nil :: Model? -- the AI killer's body, in solo games
+Match.OnNoise = nil -- set by BotKiller: function(position) for noises the AI should investigate
 
 function Match.Now(): number
 	return workspace:GetServerTimeNow()

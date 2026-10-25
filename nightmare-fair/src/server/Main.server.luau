@@ -2,6 +2,7 @@
 local Players = game:GetService("Players")
 
 local Server = script.Parent
+local BotKiller = require(Server.BotKiller)
 local CosmeticService = require(Server.CosmeticService)
 local DataService = require(Server.DataService)
 local MapBuilder = require(Server.MapBuilder)
@@ -22,6 +23,7 @@ KillerService.Init()
 ObjectiveService.Init()
 MonetizationService.Init()
 CosmeticService.Init()
+BotKiller.Init()
 RoundService.Init()
 
 local function onPlayerAdded(player: Player)

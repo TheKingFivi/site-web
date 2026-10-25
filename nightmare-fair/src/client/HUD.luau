@@ -1,6 +1,7 @@
 -- All on-screen UI, built from code.
 -- Lobby: killer picker, wardrobe, shop (bundles, Mystery Crate, passes, boosts).
 -- Match: timer, pumpkins, survivor states, skill checks, heartbeat, cage/carry screens, killer power.
+local CollectionService = game:GetService("CollectionService")
 local ContextActionService = game:GetService("ContextActionService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
@@ -93,52 +94,38 @@ local function invoke(remote: RemoteFunction, ...)
 end
 
 function HUD.Start()
-	local gui = new(
-		"ScreenGui",
-		{
-			Name = "FairHUD",
-			ResetOnSpawn = false,
-			IgnoreGuiInset = true,
-			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-			Parent = player:WaitForChild("PlayerGui"),
-		}
-	)
+	local gui = new("ScreenGui", {
+		Name = "FairHUD",
+		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		Parent = player:WaitForChild("PlayerGui"),
+	})
 
 	------------------------------------------------------------------ toasts / announcements
-	local toastHolder = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -150),
-			Size = UDim2.fromOffset(440, 220),
-			BackgroundTransparency = 1,
-			Parent = gui,
-		},
-		{
-			new(
-				"UIListLayout",
-				{
-					VerticalAlignment = Enum.VerticalAlignment.Bottom,
-					HorizontalAlignment = Enum.HorizontalAlignment.Center,
-					Padding = UDim.new(0, 6),
-					SortOrder = Enum.SortOrder.LayoutOrder,
-				}
-			),
-		}
-	)
+	local toastHolder = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -150),
+		Size = UDim2.fromOffset(440, 220),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, {
+		new("UIListLayout", {
+			VerticalAlignment = Enum.VerticalAlignment.Bottom,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 6),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
 	local toastCount = 0
 	local function toast(message: string, kind: string?)
 		toastCount += 1
-		local frame = new(
-			"Frame",
-			{
-				Size = UDim2.new(1, 0, 0, 34),
-				BackgroundColor3 = TOAST[kind or "info"] or TOAST.info,
-				LayoutOrder = toastCount,
-				Parent = toastHolder,
-			},
-			{ corner(8) }
-		)
+		local frame = new("Frame", {
+			Size = UDim2.new(1, 0, 0, 34),
+			BackgroundColor3 = TOAST[kind or "info"] or TOAST.info,
+			LayoutOrder = toastCount,
+			Parent = toastHolder,
+		}, { corner(8) })
 		text({ Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), Text = message, Parent = frame })
 		task.delay(3.5, function()
 			TweenService:Create(frame, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
@@ -198,18 +185,14 @@ function HUD.Start()
 	do
 		table.insert(
 			edges,
-			new(
-				"Frame",
-				{
-					Size = spec[1],
-					Position = spec[2],
-					BackgroundColor3 = C.red,
-					BorderSizePixel = 0,
-					BackgroundTransparency = 1,
-					Parent = vignette,
-				},
-				{ new("UIGradient", { Rotation = spec[3], Transparency = NumberSequence.new(0, 1) }) }
-			)
+			new("Frame", {
+				Size = spec[1],
+				Position = spec[2],
+				BackgroundColor3 = C.red,
+				BorderSizePixel = 0,
+				BackgroundTransparency = 1,
+				Parent = vignette,
+			}, { new("UIGradient", { Rotation = spec[3], Transparency = NumberSequence.new(0, 1) }) })
 		)
 	end
 	local flash =
@@ -231,18 +214,14 @@ function HUD.Start()
 	end)
 
 	------------------------------------------------------------------ top bar
-	local top = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 44),
-			Size = UDim2.fromOffset(340, 96),
-			BackgroundColor3 = C.panel,
-			BackgroundTransparency = 0.2,
-			Parent = gui,
-		},
-		{ corner(12), border(C.red) }
-	)
+	local top = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 44),
+		Size = UDim2.fromOffset(340, 96),
+		BackgroundColor3 = C.panel,
+		BackgroundTransparency = 0.2,
+		Parent = gui,
+	}, { corner(12), border(C.red) })
 	local titleLabel = text({
 		Size = UDim2.new(1, -16, 0, 40),
 		Position = UDim2.fromOffset(8, 4),
@@ -266,42 +245,31 @@ function HUD.Start()
 	})
 
 	-- Survivor list (right side)
-	local roster = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -12, 0, 150),
-			Size = UDim2.fromOffset(220, 260),
-			BackgroundTransparency = 1,
-			Parent = gui,
-		},
-		{
-			new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.Name }),
-		}
-	)
+	local roster = new("Frame", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 150),
+		Size = UDim2.fromOffset(220, 260),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, {
+		new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.Name }),
+	})
 
 	------------------------------------------------------------------ survivor widgets
-	local center = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -40),
-			Size = UDim2.fromOffset(380, 100),
-			BackgroundTransparency = 1,
-			Parent = gui,
-		}
-	)
-	local workFrame = new(
-		"Frame",
-		{
-			Position = UDim2.fromOffset(0, 70),
-			Size = UDim2.new(1, 0, 0, 24),
-			BackgroundColor3 = Color3.fromRGB(15, 10, 15),
-			Visible = false,
-			Parent = center,
-		},
-		{ corner(6), border(C.grey) }
-	)
+	local center = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -40),
+		Size = UDim2.fromOffset(380, 100),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	})
+	local workFrame = new("Frame", {
+		Position = UDim2.fromOffset(0, 70),
+		Size = UDim2.new(1, 0, 0, 24),
+		BackgroundColor3 = Color3.fromRGB(15, 10, 15),
+		Visible = false,
+		Parent = center,
+	}, { corner(6), border(C.grey) })
 	local workFill = new(
 		"Frame",
 		{ Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.fromRGB(255, 140, 30), Parent = workFrame },
@@ -314,16 +282,12 @@ function HUD.Start()
 		"Frame",
 		{ Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, 0, 0, 60), BackgroundTransparency = 1, Visible = false, Parent = center }
 	)
-	local track = new(
-		"Frame",
-		{
-			Position = UDim2.fromOffset(0, 26),
-			Size = UDim2.new(1, -90, 0, 26),
-			BackgroundColor3 = Color3.fromRGB(20, 12, 20),
-			Parent = skill,
-		},
-		{ corner(6), border(C.bone) }
-	)
+	local track = new("Frame", {
+		Position = UDim2.fromOffset(0, 26),
+		Size = UDim2.new(1, -90, 0, 26),
+		BackgroundColor3 = Color3.fromRGB(20, 12, 20),
+		Parent = skill,
+	}, { corner(6), border(C.bone) })
 	local goodZone = new(
 		"Frame",
 		{ Size = UDim2.fromScale(0.14, 1), BackgroundColor3 = Color3.fromRGB(240, 232, 220), BackgroundTransparency = 0.3, Parent = track }
@@ -414,27 +378,20 @@ function HUD.Start()
 		Visible = false,
 		Parent = gui,
 	})
-	local cageButtons = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0.36, 64),
-			Size = UDim2.fromOffset(420, 46),
-			BackgroundTransparency = 1,
-			Visible = false,
-			Parent = gui,
-		},
-		{
-			new(
-				"UIListLayout",
-				{
-					FillDirection = Enum.FillDirection.Horizontal,
-					HorizontalAlignment = Enum.HorizontalAlignment.Center,
-					Padding = UDim.new(0, 10),
-				}
-			),
-		}
-	)
+	local cageButtons = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0.36, 64),
+		Size = UDim2.fromOffset(420, 46),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = gui,
+	}, {
+		new("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+			Padding = UDim.new(0, 10),
+		}),
+	})
 	local useBreakOut = button({ Size = UDim2.fromOffset(200, 44), Text = "🗝️ USE BREAK OUT", Parent = cageButtons }, C.gold)
 	local buyBreakOut = button(
 		{ Size = UDim2.fromOffset(200, 44), Text = "🗝️ BREAK OUT  R$ " .. Config.Products.SelfRescue.Price, Parent = cageButtons },
@@ -461,19 +418,15 @@ function HUD.Start()
 	end)
 
 	-- Killer power widget
-	local power = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -30),
-			Size = UDim2.fromOffset(360, 60),
-			BackgroundColor3 = C.panel,
-			BackgroundTransparency = 0.2,
-			Visible = false,
-			Parent = gui,
-		},
-		{ corner(10), border(C.red) }
-	)
+	local power = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, -30),
+		Size = UDim2.fromOffset(360, 60),
+		BackgroundColor3 = C.panel,
+		BackgroundTransparency = 0.2,
+		Visible = false,
+		Parent = gui,
+	}, { corner(10), border(C.red) })
 	local powerLabel = text({ Size = UDim2.new(1, -16, 0, 28), Position = UDim2.fromOffset(8, 4), Text = "", Parent = power })
 	local attackLabel =
 		text({ Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, 32), Text = "", TextColor3 = C.dim, Parent = power })
@@ -481,20 +434,16 @@ function HUD.Start()
 	------------------------------------------------------------------ lobby panels
 	local panels = {}
 	local function makePanel(name: string, title: string, size: Vector2)
-		local panel = new(
-			"Frame",
-			{
-				Name = name,
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.55),
-				Size = UDim2.fromOffset(size.X, size.Y),
-				BackgroundColor3 = C.panel,
-				Visible = false,
-				ZIndex = 10,
-				Parent = gui,
-			},
-			{ corner(14), border(C.red, 3) }
-		)
+		local panel = new("Frame", {
+			Name = name,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.55),
+			Size = UDim2.fromOffset(size.X, size.Y),
+			BackgroundColor3 = C.panel,
+			Visible = false,
+			ZIndex = 10,
+			Parent = gui,
+		}, { corner(14), border(C.red, 3) })
 		text({
 			Size = UDim2.new(1, -80, 0, 40),
 			Position = UDim2.fromOffset(16, 8),
@@ -508,22 +457,18 @@ function HUD.Start()
 		close.Activated:Connect(function()
 			panel.Visible = false
 		end)
-		local scroll = new(
-			"ScrollingFrame",
-			{
-				Position = UDim2.fromOffset(12, 56),
-				Size = UDim2.new(1, -24, 1, -68),
-				BackgroundTransparency = 1,
-				BorderSizePixel = 0,
-				CanvasSize = UDim2.new(),
-				AutomaticCanvasSize = Enum.AutomaticSize.Y,
-				ScrollBarThickness = 6,
-				Parent = panel,
-			},
-			{
-				new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
-			}
-		)
+		local scroll = new("ScrollingFrame", {
+			Position = UDim2.fromOffset(12, 56),
+			Size = UDim2.new(1, -24, 1, -68),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			CanvasSize = UDim2.new(),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 6,
+			Parent = panel,
+		}, {
+			new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		})
 		panels[name] = panel
 		return panel, scroll
 	end
@@ -754,19 +699,15 @@ function HUD.Start()
 	end
 
 	-- Lobby buttons
-	local side = new(
-		"Frame",
-		{
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 12, 0.5, 0),
-			Size = UDim2.fromOffset(150, 190),
-			BackgroundTransparency = 1,
-			Parent = gui,
-		},
-		{
-			new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
-		}
-	)
+	local side = new("Frame", {
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 12, 0.5, 0),
+		Size = UDim2.fromOffset(150, 190),
+		BackgroundTransparency = 1,
+		Parent = gui,
+	}, {
+		new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
 	local killersButton = button({ Size = UDim2.fromOffset(150, 52), Text = "🔪 KILLERS", LayoutOrder = 1, Parent = side }, C.red)
 	local wardrobeButton = button({ Size = UDim2.fromOffset(150, 52), Text = "🎭 WARDROBE", LayoutOrder = 2, Parent = side }, C.purple)
 	local shopButton = button({ Size = UDim2.fromOffset(150, 52), Text = "🛒 SHOP", LayoutOrder = 3, Parent = side }, C.gold)
@@ -808,6 +749,12 @@ function HUD.Start()
 					if root and myRoot then
 						danger = math.clamp(1 - (root.Position - myRoot.Position).Magnitude / 60, 0, 1)
 					end
+				end
+			end
+			for _, bot in CollectionService:GetTagged("KillerBot") do
+				local root = bot:FindFirstChild("HumanoidRootPart")
+				if root and myRoot then
+					danger = math.max(danger, math.clamp(1 - (root.Position - myRoot.Position).Magnitude / 60, 0, 1))
 				end
 			end
 		end

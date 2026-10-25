@@ -80,6 +80,9 @@ local function lightPumpkin(pumpkin, workers)
 	if Match.Killer then
 		Remotes.Ping:FireClient(Match.Killer, pumpkin.Position, "pumpkin")
 	end
+	if Match.OnNoise then
+		Match.OnNoise(pumpkin.Position)
+	end
 	if count >= Config.Pumpkins.Needed and not workspace:GetAttribute("GatesPowered") then
 		powerGates()
 	else
@@ -106,6 +109,9 @@ local function resolveSkillCheck(player: Player, result: string)
 		if Match.Killer then
 			Remotes.Ping:FireClient(Match.Killer, pumpkin.Position, "noise")
 			Remotes.notify(Match.Killer, "💥 A survivor botched a pumpkin!", "info")
+		end
+		if Match.OnNoise then
+			Match.OnNoise(pumpkin.Position)
 		end
 	end
 	setPumpkinVisual(pumpkin)

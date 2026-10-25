@@ -20,6 +20,18 @@ local function now()
 	return Match.Now()
 end
 
+-- The carrier is either the killer Player or the AI killer (a table with a Root part).
+local function isPlayer(carrier): boolean
+	return typeof(carrier) == "Instance" and carrier:IsA("Player")
+end
+
+local function carrierRoot(carrier): BasePart?
+	if isPlayer(carrier) then
+		return Match.Root(carrier)
+	end
+	return carrier and carrier.Root
+end
+
 local function prompt(player: Player, name: string)
 	local root = Match.Root(player)
 	return root and root:FindFirstChild(name)
@@ -173,7 +185,7 @@ function SurvivorService.Pickup(killer: Player, survivor: Player)
 	if SurvivorService.CarriedBy(killer) then
 		return
 	end
-	local killerRoot, root = Match.Root(killer), Match.Root(survivor)
+	local killerRoot, root = carrierRoot(killer), Match.Root(survivor)
 	if not killerRoot or not root or (killerRoot.Position - root.Position).Magnitude > 10 then
 		return
 	end
@@ -187,7 +199,9 @@ function SurvivorService.Pickup(killer: Player, survivor: Player)
 	carried[survivor] = { Killer = killer, Weld = weld, EndsAt = now() + Config.Cage.WiggleTime, Saved = saved }
 	survivor:SetAttribute("WiggleEndsAt", now() + Config.Cage.WiggleTime)
 	Remotes.notify(survivor, "😱 You're being carried! You'll wiggle free in " .. Config.Cage.WiggleTime .. "s...", "error")
-	Remotes.notify(killer, "Bring them to a 🐦‍⬛ Crow Cage!", "info")
+	if isPlayer(killer) then
+		Remotes.notify(killer, "Bring them to a 🐦‍⬛ Crow Cage!", "info")
+	end
 	if SurvivorService.OnCarryChanged then
 		SurvivorService.OnCarryChanged(killer)
 	end
@@ -203,7 +217,7 @@ function SurvivorService.Drop(survivor: Player, newHealth: string?)
 	info.Weld:Destroy()
 	setCarryPhysics(survivor, false, info.Saved)
 	survivor:SetAttribute("WiggleEndsAt", nil)
-	local root, killerRoot = Match.Root(survivor), Match.Root(info.Killer)
+	local root, killerRoot = Match.Root(survivor), carrierRoot(info.Killer)
 	if root then
 		if killerRoot then
 			root.CFrame = killerRoot.CFrame * CFrame.new(0, 0, 3)
@@ -321,8 +335,10 @@ function SurvivorService.CageSurvivor(killer: Player, cage)
 	SurvivorService.SetHealth(survivor, "Caged")
 	cage.Light.Color = Color3.fromRGB(255, 200, 60)
 
-	local earned = DataService.AddTickets(killer, Config.Rewards.KillerCage, true)
-	Remotes.notify(killer, "🐦‍⬛ Caged " .. survivor.DisplayName .. "! +" .. earned .. " 🎟️", "success")
+	if isPlayer(killer) then
+		local earned = DataService.AddTickets(killer, Config.Rewards.KillerCage, true)
+		Remotes.notify(killer, "🐦‍⬛ Caged " .. survivor.DisplayName .. "! +" .. earned .. " 🎟️", "success")
+	end
 	if count > #Config.Cage.Stages then
 		SurvivorService.Eliminate(survivor, "caged 3 times")
 		return
@@ -426,7 +442,7 @@ local function tick()
 			local killer = info.Killer
 			SurvivorService.Drop(survivor, "Injured")
 			Remotes.notify(survivor, "💪 You wiggled free!", "success")
-			if killer then
+			if isPlayer(killer) then
 				Remotes.notify(killer, "They wiggled free!", "error")
 			end
 		end

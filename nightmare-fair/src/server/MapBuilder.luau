@@ -116,16 +116,13 @@ local function buildJunkyard(parent)
 		Props.BrokenTeacup(at(s[1], s[2], rng:NextNumber(0, 360)), yard)
 		reserve(s[1], s[2], 7)
 	end
-	local sign = Props.Part(
-		{
-			Name = "JunkSign",
-			Size = Vector3.new(14, 3, 0.5),
-			CFrame = at(100, -100, 45) * CFrame.new(0, 8, 0),
-			Color = rgb(60, 55, 50),
-			Material = Enum.Material.CorrodedMetal,
-		},
-		yard
-	)
+	local sign = Props.Part({
+		Name = "JunkSign",
+		Size = Vector3.new(14, 3, 0.5),
+		CFrame = at(100, -100, 45) * CFrame.new(0, 8, 0),
+		Color = rgb(60, 55, 50),
+		Material = Enum.Material.CorrodedMetal,
+	}, yard)
 	Props.Sign(sign, Enum.NormalId.Front, "RIDE GRAVEYARD", rgb(255, 140, 60))
 	Props.Part(
 		{ Name = "SignPost", Size = Vector3.new(0.6, 7, 0.6), CFrame = at(100, -100) * CFrame.new(0, 3.5, 0), Color = rgb(45, 45, 52) },
@@ -269,27 +266,21 @@ end
 local function buildLobby(parent)
 	local lobby = Props.Model("Lobby", parent)
 	local origin = CFrame.new(0, 0, -900)
-	Props.Part(
-		{
-			Name = "Floor",
-			Size = Vector3.new(90, 2, 90),
-			CFrame = origin * CFrame.new(0, -1, 0),
-			Color = rgb(45, 30, 50),
-			Material = Enum.Material.Slate,
-		},
-		lobby
-	)
+	Props.Part({
+		Name = "Floor",
+		Size = Vector3.new(90, 2, 90),
+		CFrame = origin * CFrame.new(0, -1, 0),
+		Color = rgb(45, 30, 50),
+		Material = Enum.Material.Slate,
+	}, lobby)
 	for _, spec in { { 0, -45, 0 }, { 0, 45, 0 }, { -45, 0, 90 }, { 45, 0, 90 } } do
-		Props.Part(
-			{
-				Name = "Wall",
-				Size = Vector3.new(90, 14, 2),
-				CFrame = origin * CFrame.new(spec[1], 7, spec[2]) * CFrame.Angles(0, math.rad(spec[3]), 0),
-				Color = rgb(70, 40, 60),
-				Material = Enum.Material.WoodPlanks,
-			},
-			lobby
-		)
+		Props.Part({
+			Name = "Wall",
+			Size = Vector3.new(90, 14, 2),
+			CFrame = origin * CFrame.new(spec[1], 7, spec[2]) * CFrame.Angles(0, math.rad(spec[3]), 0),
+			Color = rgb(70, 40, 60),
+			Material = Enum.Material.WoodPlanks,
+		}, lobby)
 	end
 	Props.EntranceArch(origin * CFrame.new(0, 0, 30), lobby, "NIGHTMARE FAIR")
 	Props.Carousel(origin * CFrame.new(0, 0, -14), lobby)
@@ -322,16 +313,13 @@ function MapBuilder.Build()
 	map.Name = "Map"
 	map.Parent = workspace
 
-	Props.Part(
-		{
-			Name = "Ground",
-			Size = Vector3.new(HALF * 2 + 200, 2, HALF * 2 + 200),
-			CFrame = CFrame.new(0, -1, 0),
-			Color = rgb(40, 52, 32),
-			Material = Enum.Material.Grass,
-		},
-		map
-	)
+	Props.Part({
+		Name = "Ground",
+		Size = Vector3.new(HALF * 2 + 200, 2, HALF * 2 + 200),
+		CFrame = CFrame.new(0, -1, 0),
+		Color = rgb(40, 52, 32),
+		Material = Enum.Material.Grass,
+	}, map)
 
 	-- Reserve the main paths so clutter doesn't block them
 	for i = -HALF, HALF, 10 do

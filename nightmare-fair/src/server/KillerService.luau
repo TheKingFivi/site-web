@@ -13,6 +13,8 @@ local Match = require(script.Parent.Match)
 local SurvivorService = require(script.Parent.SurvivorService)
 
 local KillerService = {}
+KillerService.OnPalletDropped = nil -- set by BotKiller: function(position, survivor)
+KillerService.Dress = nil -- assigned below
 
 local state = {
 	StunnedUntil = 0,
@@ -60,8 +62,8 @@ local function newPart(props)
 	return part
 end
 
-local function dressKiller(player: Player, killerType: string)
-	local character = player.Character
+-- Dresses a killer body. `player` (optional) is whose equipped skin to use; the AI killer has none.
+local function dressKiller(character: Model?, killerType: string, player: Player?)
 	local head = character and character:FindFirstChild("Head")
 	local hand = character and (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm"))
 	if not head or not hand then
@@ -220,7 +222,7 @@ local function dressKiller(player: Player, killerType: string)
 		)
 	end
 	-- Equipped killer skin recolors the mask and glowing accents
-	local skinId = player:GetAttribute("Skin_" .. killerType)
+	local skinId = player and player:GetAttribute("Skin_" .. killerType)
 	local skin = skinId and player:GetAttribute("Owned_" .. skinId) and Cosmetics.ById[skinId]
 	local accent = if skin then skin.Accent else info.Color
 	if skin then
@@ -254,6 +256,8 @@ local function dressKiller(player: Player, killerType: string)
 	reveal.Enabled = false
 	reveal.Parent = character
 end
+
+KillerService.Dress = dressKiller
 
 -- Phantom invisibility ---------------------------------------------------
 
@@ -514,6 +518,8 @@ local function setupPallets()
 				KillerService.Stun(Config.Pallet.StunTime, "a pallet")
 				local earned = DataService.AddTickets(survivor, Config.Rewards.PalletStun, true)
 				Remotes.notify(survivor, "💥 PALLET STUN! +" .. earned .. " 🎟️", "success")
+			elseif KillerService.OnPalletDropped then
+				KillerService.OnPalletDropped(spot.Dropped.Position, survivor)
 			end
 		end)
 		spot.BreakPrompt.Triggered:Connect(function(killer)
@@ -559,12 +565,12 @@ function KillerService.Setup(player: Player, killerType: string)
 	if character then
 		Match.SetCollisionGroup(character, "Players")
 	end
-	dressKiller(player, killerType)
+	dressKiller(player.Character, killerType, player)
 end
 
 function KillerService.Reveal(seconds: number)
 	local killer = Match.Killer
-	local character = killer and killer.Character
+	local character = if killer then killer.Character else Match.BotModel
 	local highlight = character and character:FindFirstChild("RevealHighlight")
 	if highlight then
 		highlight.Enabled = true

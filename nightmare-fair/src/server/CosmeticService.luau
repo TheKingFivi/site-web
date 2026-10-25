@@ -131,7 +131,12 @@ local HATS = {
 		attach(
 			f,
 			head,
-			{ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 1.45, 1.45), Color = rgb(150, 255, 90), Material = Enum.Material.Neon },
+			{
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(0.2, 1.45, 1.45),
+				Color = rgb(150, 255, 90),
+				Material = Enum.Material.Neon,
+			},
 			CFrame.new(0, 0.9, 0) * CFrame.Angles(0, 0, math.rad(90))
 		)
 	end,
@@ -186,7 +191,12 @@ local HATS = {
 		local ring = attach(
 			f,
 			head,
-			{ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.15, 1.6, 1.6), Color = rgb(255, 240, 150), Material = Enum.Material.Neon },
+			{
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(0.15, 1.6, 1.6),
+				Color = rgb(255, 240, 150),
+				Material = Enum.Material.Neon,
+			},
 			CFrame.new(0, 1.4, 0) * CFrame.Angles(0, 0, math.rad(90))
 		)
 		glow(ring, rgb(255, 240, 160), 10)
