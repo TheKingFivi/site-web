@@ -38,6 +38,7 @@ end
 
 -- Costumes ---------------------------------------------------------------
 
+local dressBanshee
 local function weld(part: BasePart, to: BasePart, offset: CFrame, parent: Instance)
 	part.Anchored = false
 	part.CanCollide = false
@@ -61,6 +62,90 @@ local function newPart(props)
 		part[key] = value
 	end
 	return part
+end
+
+-- The Banshee: a floating figure in a tattered dress and veil, no feet, glowing white eyes.
+dressBanshee = function(character: Model, head: BasePart, costume: Folder, info)
+	local torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+	local lower = character:FindFirstChild("LowerTorso") or torso
+	local cloth = Color3.fromRGB(46, 44, 50)
+	-- Veil over the head and down the back
+	weld(
+		newPart({
+			Name = "Veil",
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(1.9, 2.3, 1.9),
+			Color = cloth,
+			Material = Enum.Material.Fabric,
+			Transparency = 0.15,
+		}),
+		head,
+		CFrame.new(0, 0.2, 0.15),
+		costume
+	)
+	weld(
+		newPart({ Name = "VeilTail", Size = Vector3.new(2, 4.5, 0.15), Color = cloth, Material = Enum.Material.Fabric, Transparency = 0.25 }),
+		head,
+		CFrame.new(0, -1.6, 0.95) * CFrame.Angles(math.rad(-8), 0, 0),
+		costume
+	)
+	-- Pale, hollow face
+	local face = weld(
+		newPart({ Name = "Face", Shape = Enum.PartType.Ball, Size = Vector3.new(1.15, 1.45, 0.9), Color = Color3.fromRGB(214, 214, 206) }),
+		head,
+		CFrame.new(0, -0.05, -0.35),
+		costume
+	)
+	for _, x in { -0.25, 0.25 } do
+		weld(
+			newPart({ Name = "Eye", Size = Vector3.new(0.24, 0.16, 0.1), Color = info.Color, Material = Enum.Material.Neon }),
+			face,
+			CFrame.new(x, 0.15, -0.43),
+			costume
+		)
+	end
+	weld(
+		newPart({ Name = "Mouth", Shape = Enum.PartType.Ball, Size = Vector3.new(0.35, 0.6, 0.2), Color = Color3.fromRGB(10, 8, 10) }),
+		face,
+		CFrame.new(0, -0.35, -0.4),
+		costume
+	)
+	-- Long tattered dress that hides the legs (she floats)
+	if lower then
+		for i, size in { 2.4, 3.0, 3.6 } do
+			weld(
+				newPart({
+					Name = "Dress",
+					Shape = Enum.PartType.Cylinder,
+					Size = Vector3.new(1.6, size, size),
+					Color = cloth:Lerp(Color3.new(0, 0, 0), i * 0.08),
+					Material = Enum.Material.Fabric,
+				}),
+				lower,
+				CFrame.new(0, -0.6 - i * 1.3, 0) * CFrame.Angles(0, 0, math.rad(90)),
+				costume
+			)
+		end
+		for i = 0, 7 do
+			local a = i / 8 * math.pi * 2
+			weld(
+				newPart({ Name = "Tatter", Size = Vector3.new(0.6, 1.6, 0.1), Color = cloth, Material = Enum.Material.Fabric }),
+				lower,
+				CFrame.new(math.cos(a) * 1.7, -5.3, math.sin(a) * 1.7) * CFrame.Angles(0, -a + math.pi / 2, math.rad(8)),
+				costume
+			)
+		end
+	end
+	for _, part in character:GetDescendants() do
+		if part:IsA("BasePart") and (string.find(part.Name, "Leg") or string.find(part.Name, "Foot")) then
+			part.Transparency = 1
+		end
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid and not character:GetAttribute("Floating") then
+		character:SetAttribute("Floating", true)
+		humanoid.HipHeight += 1.6
+	end
 end
 
 -- Dresses a killer body. `player` (optional) is whose equipped skin to use; the AI killer has none.
@@ -176,6 +261,8 @@ local function dressKiller(character: Model?, killerType: string, player: Player
 			CFrame.new(0, -1.9, -0.9),
 			costume
 		)
+	elseif killerType == "Banshee" then
+		dressBanshee(character, head, costume, info)
 	else
 		local mask = weld(
 			newPart({
@@ -320,6 +407,46 @@ function KillerService.Stun(seconds: number, reason: string)
 	Remotes.notify(killer, "💫 Stunned by " .. reason .. "!", "error")
 end
 
+-- Slows the player killer for a moment (e.g. after searching an empty locker).
+function KillerService.SlowFor(seconds: number)
+	state.SlowedUntil = math.max(state.SlowedUntil, now() + seconds)
+end
+
+-- Teleports a killer body forward through the air (stops before walls). If it lands right next to a
+-- standing survivor, onHit(survivor) is called. Shared by the player Banshee and the AI.
+function KillerService.Blink(character: Model?, root: BasePart, info, onHit, towards: Vector3?)
+	local look = if towards then (towards - root.Position) else root.CFrame.LookVector
+	local direction = Vector3.new(look.X, 0, look.Z)
+	if direction.Magnitude < 0.01 then
+		return
+	end
+	direction = direction.Unit
+	local distance = info.BlinkDistance
+	if towards then
+		distance = math.min(distance, (towards - root.Position).Magnitude - 3)
+	end
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character }
+	params.RespectCanCollide = true -- corn and other non-solid things don't stop a blink
+	local hit = workspace:Raycast(root.Position, direction * distance, params)
+	if hit then
+		distance = math.max(0, hit.Distance - 2.5)
+	end
+	local from = root.Position
+	local target = from + direction * distance
+	Remotes.Sfx:FireAllClients("Blink", from)
+	root.CFrame = CFrame.lookAt(target, target + direction)
+	Remotes.Sfx:FireAllClients("Blink", target)
+	for _, survivor in Match.Survivors() do
+		local sroot = Match.Root(survivor)
+		if sroot and Match.IsStandingSurvivor(survivor) and (sroot.Position - target).Magnitude < 5 then
+			onHit(survivor)
+			break
+		end
+	end
+end
+
 function KillerService.Freeze(seconds: number)
 	state.FrozenUntil = now() + seconds
 end
@@ -367,10 +494,11 @@ local function attack(killer: Player)
 	local best, bestDistance = nil, math.huge
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.RespectCanCollide = true -- you can swing through corn
 	for _, survivor in Match.Survivors() do
 		local health = Match.Health(survivor)
 		local sroot = Match.Root(survivor)
-		if sroot and (health == "Healthy" or health == "Injured") then
+		if sroot and (health == "Healthy" or health == "Injured") and not survivor:GetAttribute("Hiding") then
 			local offset = sroot.Position - root.Position
 			local flat = Vector3.new(offset.X, 0, offset.Z)
 			local distance = flat.Magnitude
@@ -484,6 +612,15 @@ local function useAbility(killer: Player)
 		if not SurvivorService.CarriedBy(killer) then
 			state.ChargeUntil = t + info.ChargeTime
 			state.ChargeHit = false
+			used = true
+		end
+	elseif killerType == "Banshee" then
+		local root = Match.Root(killer)
+		if root then
+			KillerService.Blink(killer.Character, root, info, function(victim)
+				landHit(killer, victim)
+			end)
+			state.SlowedUntil = t + info.BlinkFatigue
 			used = true
 		end
 	elseif killerType == "Phantom" then

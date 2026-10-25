@@ -10,6 +10,7 @@ local Remotes = require(Shared.Remotes)
 local BotKiller = require(script.Parent.BotKiller)
 local CosmeticService = require(script.Parent.CosmeticService)
 local DataService = require(script.Parent.DataService)
+local HideService = require(script.Parent.HideService)
 local KillerService = require(script.Parent.KillerService)
 local Match = require(script.Parent.Match)
 local ObjectiveService = require(script.Parent.ObjectiveService)
@@ -129,11 +130,10 @@ local function startMatch(players)
 	setPhase("Match", Config.MatchTime)
 	if not killer then
 		workspace:SetAttribute("KillerName", "AI")
-		BotKiller.Start()
-		Remotes.announce(
-			"🤖 Solo hunt: the AI Ringmaster is coming for you! When more players join, one of them becomes the killer.",
-			Config.Killers.Ringmaster.Color
-		)
+		Match.KillerType = BotKiller.Start()
+		workspace:SetAttribute("KillerType", Match.KillerType)
+		local info = Config.Killers[Match.KillerType]
+		Remotes.announce(info.Name .. " is hunting you. Light the pumpkins, hide in lockers, and escape.", info.Color)
 		return
 	end
 	workspace:SetAttribute("KillerName", killer.DisplayName)
@@ -216,6 +216,7 @@ local function endMatch(result: string)
 	end
 	task.wait(Config.ResultsTime)
 
+	HideService.Reset()
 	SurvivorService.ResetAll()
 	KillerService.Reset()
 	ObjectiveService.Reset()
@@ -230,6 +231,7 @@ local function endMatch(result: string)
 		player:SetAttribute("CageEndsAt", nil)
 		player:SetAttribute("TrappedUntil", nil)
 		player:SetAttribute("Vanished", nil)
+		player:SetAttribute("Hiding", nil)
 		if player:GetAttribute("Loaded") then
 			player:LoadCharacter()
 		end
@@ -280,53 +282,54 @@ function RoundService.OnCharacterAdded(player: Player, character: Model)
 	end
 end
 
--- Moonlit and readable, DBD-style: you can see the map, but the distance fades into fog,
--- and warm carnival lights pop against the cold blue night.
+-- Rotten Fields at sunset: a low red-gold sun, long shadows, and dusty amber haze that hides the distance.
+-- Bright enough to read the map, dark enough to be tense.
 local function setupLighting()
-	Lighting.ClockTime = 0.2
-	Lighting.GeographicLatitude = 35
-	Lighting.Brightness = 2.4
-	Lighting.ExposureCompensation = 0.35
-	Lighting.Ambient = Color3.fromRGB(78, 76, 96)
-	Lighting.OutdoorAmbient = Color3.fromRGB(128, 124, 152)
-	Lighting.ColorShift_Top = Color3.fromRGB(150, 165, 210)
-	Lighting.EnvironmentDiffuseScale = 0.6
-	Lighting.EnvironmentSpecularScale = 0.6
-	Lighting.ShadowSoftness = 0.35
+	Lighting.ClockTime = 17.85
+	Lighting.GeographicLatitude = 30
+	Lighting.Brightness = 2.6
+	Lighting.ExposureCompensation = 0.1
+	Lighting.Ambient = Color3.fromRGB(86, 70, 62)
+	Lighting.OutdoorAmbient = Color3.fromRGB(140, 116, 100)
+	Lighting.ColorShift_Top = Color3.fromRGB(255, 170, 110)
+	Lighting.ColorShift_Bottom = Color3.fromRGB(60, 40, 40)
+	Lighting.EnvironmentDiffuseScale = 0.5
+	Lighting.EnvironmentSpecularScale = 0.5
+	Lighting.ShadowSoftness = 0.25
 	Lighting.GlobalShadows = true
 
 	local sky = Lighting:FindFirstChildOfClass("Sky") or Instance.new("Sky")
-	sky.MoonAngularSize = 18
-	sky.StarCount = 4000
-	sky.SunAngularSize = 0
+	sky.SunAngularSize = 14
+	sky.MoonAngularSize = 8
+	sky.StarCount = 600
 	sky.Parent = Lighting
 
 	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
-	atmosphere.Density = 0.3
-	atmosphere.Offset = 0.12
-	atmosphere.Color = Color3.fromRGB(122, 118, 150)
-	atmosphere.Decay = Color3.fromRGB(62, 54, 84)
-	atmosphere.Haze = 1.6
-	atmosphere.Glare = 0
+	atmosphere.Density = 0.36
+	atmosphere.Offset = 0.1
+	atmosphere.Color = Color3.fromRGB(196, 150, 104)
+	atmosphere.Decay = Color3.fromRGB(110, 70, 52)
+	atmosphere.Haze = 2.2
+	atmosphere.Glare = 0.4
 	atmosphere.Parent = Lighting
 
 	local bloom = Lighting:FindFirstChildOfClass("BloomEffect") or Instance.new("BloomEffect")
-	bloom.Intensity = 0.55
-	bloom.Size = 28
+	bloom.Intensity = 0.5
+	bloom.Size = 30
 	bloom.Threshold = 1.1
 	bloom.Parent = Lighting
 
-	local grade = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Instance.new("ColorCorrectionEffect")
-	grade.Brightness = 0.03
-	grade.Contrast = 0.14
-	grade.Saturation = -0.22
-	grade.TintColor = Color3.fromRGB(222, 226, 245)
-	grade.Parent = Lighting
+	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect") or Instance.new("SunRaysEffect")
+	rays.Intensity = 0.06
+	rays.Spread = 0.6
+	rays.Parent = Lighting
 
-	local rays = Lighting:FindFirstChildOfClass("SunRaysEffect")
-	if rays then
-		rays:Destroy()
-	end
+	local grade = Lighting:FindFirstChildOfClass("ColorCorrectionEffect") or Instance.new("ColorCorrectionEffect")
+	grade.Brightness = 0
+	grade.Contrast = 0.16
+	grade.Saturation = -0.28
+	grade.TintColor = Color3.fromRGB(255, 236, 214)
+	grade.Parent = Lighting
 end
 
 function RoundService.Init()

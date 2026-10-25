@@ -872,7 +872,9 @@ function HUD.Start(Audio)
 		local health = player:GetAttribute("Health")
 		local statusText, subText, showCage = nil, nil, false
 		if inMatch and role == "Survivor" then
-			if health == "Downed" then
+			if player:GetAttribute("Hiding") then
+				statusText, subText = "HIDING", "Hold still... The killer can search lockers. Press E to leave."
+			elseif health == "Downed" then
 				statusText, subText = "YOU'RE DOWN", "Crawl away! A teammate can help you up."
 			elseif health == "Carried" then
 				statusText = "YOU'RE BEING CARRIED"

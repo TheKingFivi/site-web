@@ -20,6 +20,7 @@ An asymmetric horror game for Roblox, in the style of Dead by Daylight, set in a
 | Killer | Power (Q) | How to unlock |
 |---|---|---|
 | 🎩 **The Ringmaster** | Bear traps: survivors who step in are stuck for 4 s and revealed | Free |
+| 👻 **The Banshee** | Blink: teleports through the air up to 24 studs and hits whoever she lands next to | 1,500 🎟️ |
 | 🔪 **The Butcher** | Charge: 1.2 s dash that injures whoever he slams into | 750 🎟️ |
 | 👻 **The Phantom** | Vanish: 6 s of invisibility and extra speed (can't attack while hidden) | 2,500 🎟️ or a 399 R$ pass |
 
@@ -36,25 +37,27 @@ Phones get on-screen buttons automatically.
 
 ---
 
-## 2. The map (500 × 500 studs)
+## 2. The map: Hollow Acres (400 × 400 studs)
 
-Built entirely from code, with no uploaded assets. About **3,900 parts and 110+ lights**, split into DBD-style zones:
+A rotting cornfield farm at sunset, in the style of DBD's Rotten Fields. Built from code with Roblox Terrain (sculpted ground, mud lanes, hills beyond the fence).
 
-| Zone | What's there |
-|---|---|
-| Center: **Midway** | Spinning carousel, 20 game booths (Ring Toss, Whack-a-Ghoul…), popcorn carts, string lights |
-| North: **Wheel of Woe** | Giant spinning Ferris wheel, Bumper Scars arena |
-| North-east: **Ride Graveyard** | Piles of wrecked cars, fallen teacups |
-| North-west: **Corn Maze** | Tall corn rows with a hidden Ritual Pumpkin |
-| East: **Big Top** | Huge striped circus tent you can run through, with a pumpkin in the ring |
-| West: **Haunted Manor** | Multi-room house with a pumpkin inside, plus a graveyard with coffins |
-| South-west: **Farm** | Red barn with a hay loft, tractor, scarecrows, pumpkin patch |
-| South: **Main Entrance** | Entrance arch, ticket booths, the killer shack loop |
-| South-east: **Lake** | Lake with dock and boat, water tower with a red beacon |
+- **Walk-through cornfields** almost everywhere (about 1,400 corn rows). You can run through the corn and it blocks the killer's view, so you can lose them in it.
+- **Wandering dirt lanes** like tractor paths.
+- **Two-story farmhouse** in the middle: stairs, rooms, a porch, wardrobes to hide in, and a Ritual Pumpkin upstairs.
+- **Two barns** (Ritual Pumpkin and lockers inside each), **grain silos**, a **spinning windmill**, an abandoned **combine harvester**, tractors, the **killer shack**, an outhouse, hay stacks.
+- **12 hiding lockers/wardrobes**, 16 pallet loops, 8 Crow Cages, 4 Ghost Bells, 2 exit gates.
+- Sunset lighting: a low red-gold sun, long shadows and amber haze.
 
-Plus **22 pallet loops**, L-wall loops, 9 Crow Cages, 4 Ghost Bells, 2 exit gates, and hundreds of hay bales, crates, barrels, pumpkin piles, scarecrows, tombstones, rocks and dead trees. A foggy forest surrounds the fence.
+`marketing/HollowAcres_TopDown.png` is an overhead picture of the real layout.
 
----
+### Hiding (lockers)
+- Survivors hold **E** on a red locker or wooden wardrobe to hide inside. The view switches to first person, looking out through the vents.
+- Press **E** again to leave.
+- The killer can **Search** a locker. If someone is inside, they're grabbed straight onto the killer's shoulder. If it's empty, the killer is slowed for a moment.
+- The AI killer searches lockers near where it last saw you.
+
+### The Banshee (4th killer)
+Floats above the ground in a tattered dress and veil. Her power (**Q**) is **Blink**: she teleports up to 24 studs forward through the air, and if she lands next to a survivor she hits them. The AI killer is either the Ringmaster or the Banshee.
 
 ## 3. Everything players can buy
 

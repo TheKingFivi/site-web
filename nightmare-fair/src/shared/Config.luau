@@ -107,7 +107,17 @@ Config.Killers = {
 		Color = Color3.fromRGB(120, 200, 255),
 	},
 }
-Config.KillerOrder = { "Ringmaster", "Butcher", "Phantom" }
+Config.Killers.Banshee = {
+	Name = "The Banshee",
+	Description = "Floats above the ground and blinks through the air to appear right next to you.",
+	Ability = "Blink",
+	Cooldown = 7,
+	BlinkDistance = 24,
+	BlinkFatigue = 1.3,
+	Price = 1500,
+	Color = Color3.fromRGB(170, 225, 255),
+}
+Config.KillerOrder = { "Ringmaster", "Banshee", "Butcher", "Phantom" }
 
 Config.Rewards = {
 	PumpkinLit = 20,
@@ -198,6 +208,7 @@ Config.Sounds = {
 	Pallet = { Id = 0, Volume = 1, File = "sfx_pallet.ogg" },
 	CageScream = { Id = 0, Volume = 0.9, File = "sfx_cage_scream.ogg" },
 	GateAlarm = { Id = 0, Volume = 0.6, File = "sfx_gate_alarm.ogg" },
+	Blink = { Id = 0, Volume = 0.9, File = "sfx_blink.ogg" },
 }
 Config.TerrorRadius = 45 -- studs: the heartbeat starts here
 Config.ChaseRadius = 22 -- studs: chase music kicks in here
@@ -222,6 +233,19 @@ Config.KillerLooks = {
 		Animations = { Run = 0, Walk = 0, Idle = 0 },
 	},
 	Butcher = {
+		Hat = "",
+		Face = "",
+		Back = "",
+		Front = "",
+		Neck = "",
+		Shoulder = "",
+		Waist = "",
+		Shirt = 0,
+		Pants = 0,
+		FaceDecal = 0,
+		Animations = { Run = 0, Walk = 0, Idle = 0 },
+	},
+	Banshee = {
 		Hat = "",
 		Face = "",
 		Back = "",

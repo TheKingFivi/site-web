@@ -1,22 +1,15 @@
--- Lays out the whole Nightmare Fair map (500 x 500 studs) in themed zones, DBD-style:
---   NW corn maze · N Ferris wheel & bumper cars · NE junkyard
---   W haunted manor & graveyard · center carousel & midway · E circus tent
---   SW farm & barn · S main entrance & killer shack · SE lake & water tower
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Config = require(Shared.Config)
-
+-- Lays out Hollow Acres: a rotting cornfield farm at sunset (400 x 400 studs), DBD Rotten Fields style.
+--   center: two-story farmhouse · NW: barn + grain silos · SE: second barn · NE: windmill
+--   N: abandoned combine harvester · SW: killer shack · everywhere else: tall walk-through corn
 local Props = require(script.Parent.Props)
 
 local MapBuilder = {}
 
-local HALF = 250 -- the map spans -250..250 on X and Z
+local HALF = 200 -- the map spans -200..200 on X and Z
 local rng = Random.new(66613)
 local rgb = Color3.fromRGB
 
-local reserved = {} -- { position: Vector3, radius: number } spots props must not overlap
-local boothSpots = {}
+local reserved = {} -- { position: Vector3, radius: number } spots corn and props must not overlap
 
 local function at(x: number, z: number, yawDeg: number?)
 	return CFrame.new(x, 0, z) * CFrame.Angles(0, math.rad(yawDeg or 0), 0)
@@ -27,7 +20,7 @@ local function reserve(x: number, z: number, radius: number)
 end
 
 local function isFree(x: number, z: number, radius: number)
-	if math.abs(x) > HALF - 8 or math.abs(z) > HALF - 8 then
+	if math.abs(x) > HALF - 6 or math.abs(z) > HALF - 6 then
 		return false
 	end
 	local p = Vector3.new(x, 0, z)
@@ -39,9 +32,17 @@ local function isFree(x: number, z: number, radius: number)
 	return true
 end
 
+local function tryPlace(x: number, z: number, radius: number, build)
+	if isFree(x, z, radius) then
+		build(at(x, z, rng:NextNumber(0, 360)))
+		reserve(x, z, radius)
+		return true
+	end
+	return false
+end
+
 local terrain = workspace.Terrain
 
--- Paints a strip of the ground with a terrain material without changing its height.
 local function paintStrip(from: Vector2, to: Vector2, width: number, material: Enum.Material)
 	local a, b = Vector3.new(from.X, -1, from.Y), Vector3.new(to.X, -1, to.Y)
 	terrain:FillBlock(CFrame.lookAt((a + b) / 2, b), Vector3.new(width, 2, (b - a).Magnitude + width), material)
@@ -51,214 +52,47 @@ local function paintCircle(x: number, z: number, radius: number, material: Enum.
 	terrain:FillCylinder(CFrame.new(x, -1, z), 2, radius, material)
 end
 
-local function path(_, from: Vector2, to: Vector2, width: number)
+-- A dirt lane: painted mud, kept clear of corn
+local function lane(from: Vector2, to: Vector2, width: number)
 	paintStrip(from, to, width, Enum.Material.Mud)
+	local length = (to - from).Magnitude
+	for d = 0, length, width * 0.6 do
+		local p = from:Lerp(to, d / length)
+		reserve(p.X, p.Y, width * 0.5)
+	end
 end
 
--- Sculpted ground: grass base, worn patches, zone floors, a real water lake, and hills beyond the fence.
 local function buildTerrain()
 	terrain:Clear()
 	terrain:FillBlock(CFrame.new(0, -6, 0), Vector3.new(HALF * 2 + 260, 12, HALF * 2 + 260), Enum.Material.Grass)
-	-- Worn, uneven ground so it isn't one flat color
-	for _ = 1, 70 do
-		local x, z = rng:NextNumber(-HALF, HALF), rng:NextNumber(-HALF, HALF)
-		local material = ({ Enum.Material.LeafyGrass, Enum.Material.Ground, Enum.Material.Mud })[rng:NextInteger(1, 3)]
-		paintCircle(x, z, rng:NextNumber(6, 18), material)
+	-- Tilled soil under the whole field, with patchy grass
+	terrain:FillBlock(CFrame.new(0, -1, 0), Vector3.new(HALF * 2, 2, HALF * 2), Enum.Material.Ground)
+	for _ = 1, 60 do
+		paintCircle(
+			rng:NextNumber(-HALF, HALF),
+			rng:NextNumber(-HALF, HALF),
+			rng:NextNumber(5, 14),
+			if rng:NextNumber() < 0.6 then Enum.Material.LeafyGrass else Enum.Material.Mud
+		)
 	end
-	-- Zone floors
-	paintCircle(0, 0, 30, Enum.Material.Cobblestone) -- carousel plaza
-	terrain:FillBlock(CFrame.new(-167, -1, -167), Vector3.new(146, 2, 146), Enum.Material.Ground) -- corn field soil
-	terrain:FillBlock(CFrame.new(170, -1, -170), Vector3.new(140, 2, 140), Enum.Material.Slate) -- junkyard gravel
-	terrain:FillBlock(CFrame.new(-176, -1, 75), Vector3.new(64, 2, 52), Enum.Material.Mud) -- graveyard
-	terrain:FillBlock(CFrame.new(-165, -1, 175), Vector3.new(70, 2, 60), Enum.Material.Ground) -- farmyard
-	paintCircle(150, 0, 36, Enum.Material.Sand) -- circus ring sawdust
-	-- Lake: dig a basin, fill it with water, muddy shore
-	terrain:FillBlock(CFrame.new(175, -4, 175), Vector3.new(88, 8, 68), Enum.Material.Mud)
-	terrain:FillBlock(CFrame.new(175, -3, 175), Vector3.new(80, 6, 60), Enum.Material.Air)
-	terrain:FillBlock(CFrame.new(175, -4, 175), Vector3.new(80, 4, 60), Enum.Material.Water)
-	-- Hills and rock outcrops beyond the fence (leave the two exit corridors open)
+	paintCircle(0, 0, 48, Enum.Material.Grass) -- farmhouse yard
+	-- Hills beyond the fence (exit corridors stay open)
 	for i = 0, 47 do
 		local angle = i / 48 * math.pi * 2
 		local dist = HALF + rng:NextNumber(55, 85)
 		local x = math.clamp(math.cos(angle) * dist * 1.25, -HALF - 85, HALF + 85)
 		local z = math.clamp(math.sin(angle) * dist * 1.25, -HALF - 85, HALF + 85)
 		if math.abs(x) > 50 or math.abs(z) < HALF then
-			local material = if rng:NextNumber() < 0.25 then Enum.Material.Rock else Enum.Material.Grass
-			terrain:FillBall(Vector3.new(x, -12, z), rng:NextNumber(38, 52), material)
+			terrain:FillBall(
+				Vector3.new(x, -12, z),
+				rng:NextNumber(38, 52),
+				if rng:NextNumber() < 0.25 then Enum.Material.Rock else Enum.Material.Grass
+			)
 		end
 	end
 	pcall(function()
-		terrain.Decoration = true -- animated grass blades
+		terrain.Decoration = true
 	end)
-end
-
-local function buildCornMaze(parent)
-	local maze = Props.Model("CornMaze", parent)
-	local x0, x1, z0, z1 = -238, -96, -238, -96
-	-- Outer walls with openings on the east and south sides
-	Props.CornWall(Vector3.new(x0, 0, z0), Vector3.new(x1, 0, z0), maze)
-	Props.CornWall(Vector3.new(x0, 0, z0), Vector3.new(x0, 0, z1), maze)
-	Props.CornWall(Vector3.new(x0, 0, z1), Vector3.new(-180, 0, z1), maze)
-	Props.CornWall(Vector3.new(-160, 0, z1), Vector3.new(x1, 0, z1), maze)
-	Props.CornWall(Vector3.new(x1, 0, z0), Vector3.new(x1, 0, -190), maze)
-	Props.CornWall(Vector3.new(x1, 0, -170), Vector3.new(x1, 0, z1), maze)
-	-- Inner rows with random gaps
-	for row = 1, 5 do
-		local z = z0 + row * 24
-		local gap = rng:NextNumber(x0 + 20, x1 - 30)
-		Props.CornWall(Vector3.new(x0 + 10, 0, z), Vector3.new(gap, 0, z), maze)
-		Props.CornWall(Vector3.new(gap + 16, 0, z), Vector3.new(x1 - 10, 0, z), maze)
-		if row % 2 == 0 then
-			local x = rng:NextNumber(x0 + 30, x1 - 30)
-			if math.abs(x + 167) < 10 then
-				x += 24 -- keep the maze's ritual pumpkin reachable
-			end
-			Props.CornWall(Vector3.new(x, 0, z + 4), Vector3.new(x, 0, z + 18), maze)
-		end
-	end
-	for i = 1, 3 do
-		Props.Scarecrow(at(rng:NextNumber(x0 + 15, x1 - 15), z0 + i * 24 + 12, rng:NextNumber(0, 360)), maze)
-	end
-	reserve(-167, -167, 100)
-end
-
-local function buildJunkyard(parent)
-	local yard = Props.Model("Junkyard", parent)
-	local spots = {
-		{ 115, -120 },
-		{ 140, -205 },
-		{ 190, -110 },
-		{ 215, -175 },
-		{ 175, -230 },
-		{ 120, -175 },
-		{ 205, -140 },
-		{ 145, -130 },
-	}
-	for _, s in spots do
-		Props.CarPile(at(s[1], s[2], rng:NextNumber(0, 360)), yard)
-		reserve(s[1], s[2], 10)
-	end
-	for _, s in { { 185, -195 }, { 125, -225 }, { 230, -105 } } do
-		Props.BrokenTeacup(at(s[1], s[2], rng:NextNumber(0, 360)), yard)
-		reserve(s[1], s[2], 7)
-	end
-	local sign = Props.Part({
-		Name = "JunkSign",
-		Size = Vector3.new(14, 3, 0.5),
-		CFrame = at(100, -100, 45) * CFrame.new(0, 8, 0),
-		Color = rgb(60, 55, 50),
-		Material = Enum.Material.CorrodedMetal,
-	}, yard)
-	Props.Sign(sign, Enum.NormalId.Front, "RIDE GRAVEYARD", rgb(255, 140, 60))
-	Props.Part(
-		{ Name = "SignPost", Size = Vector3.new(0.6, 7, 0.6), CFrame = at(100, -100) * CFrame.new(0, 3.5, 0), Color = rgb(45, 45, 52) },
-		yard
-	)
-end
-
-local function buildGraveyard(parent)
-	local yard = Props.Model("Graveyard", parent)
-	for row = 0, 4 do
-		for col = 0, 6 do
-			if rng:NextNumber() < 0.85 then
-				Props.Tombstone(at(-200 + col * 8 + rng:NextNumber(-1, 1), 55 + row * 9, rng:NextNumber(-10, 10)), yard)
-			end
-		end
-	end
-	Props.Coffin(at(-150, 70, 30), yard)
-	Props.Coffin(at(-140, 95, -20), yard)
-	Props.Fence(Vector3.new(-210, 0, 45), Vector3.new(-160, 0, 45), yard, 3)
-	Props.DeadTree(at(-130, 60), yard)
-	Props.DeadTree(at(-215, 100), yard)
-	reserve(-175, 75, 38)
-end
-
-local function buildFarm(parent)
-	local farm = Props.Model("Farm", parent)
-	Props.Barn(at(-165, 175), farm)
-	reserve(-165, 175, 26)
-	Props.Tractor(at(-120, 200, 30), farm)
-	reserve(-120, 200, 6)
-	for i = 0, 5 do
-		Props.HayBale(at(-125 + (i % 3) * 6, 150 + math.floor(i / 3) * 4, 90), farm)
-	end
-	reserve(-119, 152, 10)
-	for i = 0, 3 do
-		Props.PumpkinPile(at(-215 + i * 12, 225), farm)
-		Props.Scarecrow(at(-210 + i * 14, 130, rng:NextNumber(0, 360)), farm)
-	end
-	-- Small corn patches
-	Props.CornWall(Vector3.new(-235, 0, 115), Vector3.new(-235, 0, 150), farm)
-	Props.CornWall(Vector3.new(-100, 0, 225), Vector3.new(-60, 0, 225), farm)
-	reserve(-205, 225, 25)
-end
-
-local function buildLake(parent)
-	local lake = Props.Model("LakeZone", parent)
-	Props.Lake(at(175, 175), lake, Vector2.new(80, 60))
-	reserve(175, 175, 50)
-	Props.WaterTower(at(110, 135), lake)
-	reserve(110, 135, 10)
-	for _, s in { { 225, 120 }, { 125, 225 }, { 230, 225 } } do
-		Props.Rocks(at(s[1], s[2]), lake)
-		reserve(s[1], s[2], 8)
-	end
-end
-
-local function buildMidway(parent)
-	local midway = Props.Model("Midway", parent)
-	Props.Carousel(at(0, 0), midway)
-	reserve(0, 0, 18)
-	-- Booth rows along both main paths, facing the path
-	local colors = { Props.Colors.red, Props.Colors.purple, Props.Colors.teal, Props.Colors.gold }
-	local n = 0
-	for _, z in { 35, 60, 85, -35, -60 } do
-		for _, side in { -1, 1 } do
-			n += 1
-			Props.Booth(at(side * 22, z, if side < 0 then -90 else 90), midway, colors[n % #colors + 1])
-			table.insert(boothSpots, at(side * 22, z, if side < 0 then -90 else 90))
-			reserve(side * 22, z, 8)
-		end
-	end
-	for _, x in { 40, 65, 90, -40, -65 } do
-		for _, side in { -1, 1 } do
-			n += 1
-			Props.Booth(at(x, side * 22, if side < 0 then 0 else 180), midway, colors[n % #colors + 1])
-			table.insert(boothSpots, at(x, side * 22, if side < 0 then 0 else 180))
-			reserve(x, side * 22, 8)
-		end
-	end
-	for _, s in { { 12, 105 }, { -12, -80 }, { 105, 12 }, { -85, -12 } } do
-		Props.PopcornCart(at(s[1], s[2], rng:NextNumber(0, 360)), midway)
-		reserve(s[1], s[2], 4)
-	end
-end
-
-local function buildPathsAndLights(parent)
-	local paths = Props.Model("Paths", parent)
-	path(paths, Vector2.new(0, -HALF), Vector2.new(0, HALF), 14)
-	path(paths, Vector2.new(-HALF, 0), Vector2.new(HALF, 0), 14)
-	path(paths, Vector2.new(-150, 0), Vector2.new(-150, 160), 9)
-	path(paths, Vector2.new(150, 0), Vector2.new(150, -110), 9)
-	path(paths, Vector2.new(0, 120), Vector2.new(110, 120), 9)
-	-- Lamp posts with string lights between them, along the main paths
-	local lights = Props.Model("Lights", parent)
-	local previous = {}
-	for i = -7, 7 do
-		local d = i * 32
-		for key, pos in { NS = Vector3.new(9, 0, d), EW = Vector3.new(d, 0, -9) } do
-			if math.abs(d) > 20 and isFree(pos.X, pos.Z, 1.5) then
-				Props.LampPost(CFrame.new(pos) * CFrame.Angles(0, if key == "NS" then math.rad(90) else 0, 0), lights)
-				local top = pos + Vector3.new(0, 12.5, 0)
-				if previous[key] and (previous[key] - top).Magnitude < 40 then
-					Props.StringLights(previous[key], top, lights, 9)
-				end
-				previous[key] = top
-			else
-				previous[key] = nil
-			end
-		end
-	end
 end
 
 local function buildBoundary(parent)
@@ -330,243 +164,221 @@ local function buildLobby(parent)
 	return origin * CFrame.new(0, 3, 18)
 end
 
-local function tryPlace(x: number, z: number, radius: number, build)
-	if isFree(x, z, radius) then
-		build(at(x, z, rng:NextNumber(0, 360)))
-		reserve(x, z, radius)
-		return true
-	end
-	return false
-end
-
-local function dressMap(map, pumpkinSpots)
-	local dressing = Instance.new("Folder")
-	dressing.Name = "SetDressing"
-	dressing.Parent = map
-
-	-- A line of dead trees just inside the fence
-	for d = -HALF + 20, HALF - 20, 30 do
-		for _, spot in { { d, -HALF + 10 }, { d, HALF - 10 }, { -HALF + 10, d }, { HALF - 10, d } } do
-			if math.abs(spot[1]) > 30 or math.abs(spot[2]) < HALF - 30 then
-				tryPlace(spot[1] + rng:NextNumber(-4, 4), spot[2] + rng:NextNumber(-3, 3), 4, function(cf)
-					Props.DeadTree(cf, dressing)
-				end)
-			end
-		end
-	end
-
-	-- Behind the game booths: supply crates and barrels
-	for i, cf in boothSpots do
-		local back = cf * CFrame.new(if i % 2 == 0 then 8 else -8, 0, 6)
-		local p = back.Position
-		tryPlace(p.X, p.Z, 2.5, function(c)
-			if i % 3 == 0 then
-				Props.CrateStack(c, dressing)
-			else
-				Props.Barrel(c, dressing)
-			end
-		end)
-	end
-
-	-- Every Ritual Pumpkin has an offering pile and a scarecrow keeping watch
-	for i, s in pumpkinSpots do
-		tryPlace(s[1] + 8, s[2] + 5, 3, function(cf)
-			Props.PumpkinPile(cf, dressing)
-		end)
-		if i % 2 == 1 then
-			tryPlace(s[1] - 8, s[2] - 6, 2, function(cf)
-				Props.Scarecrow(cf, dressing)
-			end)
-		end
-	end
-
-	-- Corn field edge: scarecrows facing the midway
-	for z = -225, -110, 38 do
-		tryPlace(-88, z, 2, function(cf)
-			Props.Scarecrow(cf, dressing)
-		end)
-	end
-
-	-- Junkyard: tire stacks and oil barrels between the car piles
-	for _, s in { { 130, -140 }, { 165, -120 }, { 200, -160 }, { 150, -190 }, { 225, -205 }, { 110, -205 }, { 185, -235 } } do
-		tryPlace(s[1], s[2], 3, function(cf)
-			Props.TireStack(cf, dressing)
-		end)
-		tryPlace(s[1] + 5, s[2] + 4, 2, function(cf)
-			Props.Barrel(cf, dressing)
-		end)
-	end
-
-	-- Farm: fenced pumpkin patch, hay stacks along the barn
-	Props.LowFence(Vector3.new(-228, 0, 215), Vector3.new(-170, 0, 215), dressing)
-	Props.LowFence(Vector3.new(-228, 0, 238), Vector3.new(-170, 0, 238), dressing)
-	for i = 0, 3 do
-		tryPlace(-190 + i * 7, 150, 3, function(cf)
-			Props.HayBale(cf, dressing)
-		end)
-	end
-
-	-- Graveyard: dead trees around its edge
-	for _, s in { { -212, 52 }, { -140, 50 }, { -212, 102 }, { -150, 104 } } do
-		tryPlace(s[1], s[2], 3, function(cf)
-			Props.DeadTree(cf, dressing)
-		end)
-	end
-
-	-- Lake shore and the map corners: rock outcrops
-	for _, s in { { 128, 160 }, { 222, 150 }, { 140, 222 }, { -228, -228 }, { 228, 228 }, { -228, 228 } } do
-		tryPlace(s[1], s[2], 6, function(cf)
-			Props.Rocks(cf, dressing)
-		end)
-	end
-end
-
 function MapBuilder.Build()
 	local existing = workspace:FindFirstChild("Baseplate")
 	if existing then
 		existing:Destroy()
 	end
 	table.clear(reserved)
-	table.clear(boothSpots)
 
 	local map = Instance.new("Folder")
 	map.Name = "Map"
 	map.Parent = workspace
-
 	buildTerrain()
 
-	-- Reserve the main paths so clutter doesn't block them
-	for i = -HALF, HALF, 10 do
-		reserve(0, i, 8)
-		reserve(i, 0, 8)
-	end
-
-	local result = { Pumpkins = {}, Cages = {}, Pallets = {}, Bells = {}, Gates = {} }
-
-	-- Gameplay objects first so their spots stay clear
+	local result = { Pumpkins = {}, Cages = {}, Pallets = {}, Bells = {}, Gates = {}, Lockers = {} }
 	local objectives = Instance.new("Folder")
 	objectives.Name = "Objectives"
 	objectives.Parent = map
+	local buildings = Instance.new("Folder")
+	buildings.Name = "Buildings"
+	buildings.Parent = map
 
-	local pumpkinSpots = { { -167, -178 }, { 167, -165 }, { -150, 0 }, { 157, 0 }, { -152, 175 }, { 95, 205 }, { 45, -95 } }
-	for i = 1, Config.Pumpkins.Total do
-		local s = pumpkinSpots[i]
-		table.insert(result.Pumpkins, Props.RitualPumpkin(at(s[1], s[2], rng:NextNumber(0, 360)), objectives))
+	local function addLocker(cf: CFrame, style: string?)
+		table.insert(result.Lockers, Props.Locker(cf, objectives, style))
+	end
+	local function addPumpkin(cf: CFrame)
+		table.insert(result.Pumpkins, Props.RitualPumpkin(cf, objectives))
+		reserve(cf.X, cf.Z, 7)
+	end
+
+	-- Lanes through the corn: they wander like real tractor paths instead of running ruler-straight
+	local function wander(points, width)
+		for i = 1, #points - 1 do
+			local a, b = points[i], points[i + 1]
+			local mid = (a + b) / 2 + Vector2.new(rng:NextNumber(-10, 10), rng:NextNumber(-10, 10))
+			lane(a, mid, width)
+			lane(mid, b, width)
+		end
+	end
+	wander({ Vector2.new(0, -HALF), Vector2.new(-8, -110), Vector2.new(0, -45) }, 12)
+	wander({ Vector2.new(0, 45), Vector2.new(10, 120), Vector2.new(0, HALF) }, 12)
+	wander({ Vector2.new(-HALF + 10, 18), Vector2.new(-110, 6), Vector2.new(-48, 0) }, 9)
+	wander({ Vector2.new(48, 0), Vector2.new(110, -14), Vector2.new(HALF - 10, -6) }, 9)
+	wander({ Vector2.new(-120, -100), Vector2.new(-75, -70), Vector2.new(-30, -40) }, 9)
+	wander({ Vector2.new(125, 95), Vector2.new(85, 70), Vector2.new(38, 40) }, 9)
+	wander({ Vector2.new(115, -110), Vector2.new(70, -75), Vector2.new(30, -40) }, 8)
+	wander({ Vector2.new(-125, 120), Vector2.new(-80, 80), Vector2.new(-36, 38) }, 8)
+	wander({ Vector2.new(-170, -150), Vector2.new(-90, -160), Vector2.new(-45, -150) }, 7)
+	wander({ Vector2.new(60, 150), Vector2.new(120, 160), Vector2.new(175, 150) }, 7)
+
+	-- The farmhouse (main building), porch facing the south gate
+	local house = Props.Farmhouse(at(0, 0, 180), buildings)
+	reserve(0, 0, 42)
+	for _, cf in house.Lockers do
+		addLocker(cf, "wood")
+	end
+	addPumpkin(house.Pumpkin)
+
+	-- Barns
+	local barnA, barnB = at(-120, -100, 90), at(125, 95, 0)
+	Props.Barn(barnA, buildings)
+	Props.Barn(barnB, buildings)
+	reserve(-120, -100, 26)
+	reserve(125, 95, 26)
+	addPumpkin(barnA * CFrame.new(6, 0, 0))
+	addPumpkin(barnB * CFrame.new(6, 0, 0))
+	for _, barn in { barnA, barnB } do
+		addLocker(barn * CFrame.new(11, 0.5, 10.5), "metal")
+		addLocker(barn * CFrame.new(-11, 0.5, -10.5) * CFrame.Angles(0, math.pi, 0), "metal")
+	end
+	for _, s in { { -160, -55 }, { -178, -62 }, { -165, -78 } } do
+		Props.Silo(at(s[1], s[2], rng:NextNumber(0, 360)), buildings)
+		reserve(s[1], s[2], 9)
+	end
+	addLocker(at(-150, -66, 120), "metal")
+	reserve(-150, -66, 4)
+
+	-- Windmill, combine, killer shack, outhouse, tractors
+	Props.Windmill(at(115, -110, 200), buildings)
+	reserve(115, -110, 9)
+	addLocker(at(106, -102, 135), "metal")
+	reserve(106, -102, 4)
+	Props.Combine(at(-45, -160, 25), buildings)
+	reserve(-45, -160, 17)
+	addLocker(at(-26, -170, 200), "metal")
+	reserve(-26, -170, 4)
+	local shack = at(-125, 120, 20)
+	Props.Shack(shack, buildings)
+	reserve(-125, 120, 13)
+	addPumpkin(shack * CFrame.new(1, 0, 1))
+	addLocker(shack * CFrame.new(-5.2, 0.5, 5.4), "metal")
+	Props.Outhouse(at(48, 55, 200), buildings)
+	reserve(48, 55, 5)
+	Props.Tractor(at(62, -42, 70), buildings)
+	reserve(62, -42, 7)
+	Props.Tractor(at(-68, 44, 250), buildings)
+	reserve(-68, 44, 7)
+
+	-- Corn clearings with Ritual Pumpkins
+	for _, s in { { 78, -92 }, { -70, 95 }, { 150, 12 } } do
+		reserve(s[1], s[2], 14)
+		addPumpkin(at(s[1], s[2], rng:NextNumber(0, 360)))
+		paintCircle(s[1], s[2], 13, Enum.Material.Mud)
+	end
+
+	-- Crow Cages
+	for _, s in { { -40, -62 }, { 40, -72 }, { -92, -18 }, { 92, 26 }, { -40, 132 }, { 42, 140 }, { -160, 30 }, { 165, -60 } } do
+		table.insert(result.Cages, Props.CrowCage(at(s[1], s[2], rng:NextNumber(0, 360)), objectives))
 		reserve(s[1], s[2], 7)
 	end
 
-	for _, s in
-		{ { -80, -135 }, { 110, -95 }, { -105, 40 }, { 100, 50 }, { -60, 125 }, { 60, 165 }, { -40, -105 }, { 215, -40 }, { -215, 40 } }
-	do
-		table.insert(result.Cages, Props.CrowCage(at(s[1], s[2], rng:NextNumber(0, 360)), objectives))
-		reserve(s[1], s[2], 6)
-	end
-
-	for _, s in { { -220, -60 }, { 220, 60 }, { -60, 228 }, { 60, -228 } } do
+	-- Ghost bells in the four corners
+	for _, s in { { -172, -172 }, { 172, -172 }, { -172, 172 }, { 172, 172 } } do
 		table.insert(result.Bells, Props.Bell(at(s[1], s[2], rng:NextNumber(0, 360)), objectives))
-		reserve(s[1], s[2], 4)
+		reserve(s[1], s[2], 5)
 	end
 
+	-- Exit gates north and south
 	for _, z in { -HALF, HALF } do
-		local gate = Props.ExitGate(at(0, z, if z < 0 then 180 else 0), objectives)
-		table.insert(result.Gates, gate)
+		table.insert(result.Gates, Props.ExitGate(at(0, z, if z < 0 then 180 else 0), objectives))
 	end
 
-	-- Landmarks and zones
-	local landmarks = Instance.new("Folder")
-	landmarks.Name = "Landmarks"
-	landmarks.Parent = map
-	Props.FerrisWheel(at(0, -150), landmarks)
-	reserve(0, -150, 24)
-	Props.BumperCars(at(-55, -150), landmarks)
-	reserve(-55, -150, 24)
-	Props.CircusTent(at(150, 0), landmarks)
-	reserve(150, 0, 38)
-	Props.HauntedManor(at(-150, 0, 90), landmarks)
-	reserve(-150, 0, 30)
-	Props.FortuneTent(at(-85, 95), landmarks)
-	reserve(-85, 95, 9)
-	Props.Shack(at(-45, 165, 20), landmarks)
-	reserve(-45, 165, 12)
-	Props.EntranceArch(at(0, 215), landmarks, "NIGHTMARE FAIR")
-	for _, x in { -20, 20 } do
-		Props.TicketBooth(at(x, 205), landmarks)
-		reserve(x, 205, 6)
-	end
-
-	buildCornMaze(landmarks)
-	buildJunkyard(landmarks)
-	buildGraveyard(landmarks)
-	buildFarm(landmarks)
-	buildLake(landmarks)
-	buildMidway(landmarks)
-
-	-- Chase loops: pallets between crate stacks, and L-walls
+	-- Pallets at the edge of lanes and around buildings (chase loops)
 	local loops = Instance.new("Folder")
 	loops.Name = "Loops"
 	loops.Parent = map
-	local palletSpots = {
-		{ 32, -28, 0 },
-		{ -32, 28, 0 },
-		{ 72, 40, 90 },
-		{ -70, -40, 90 },
-		{ 120, -60, 0 },
-		{ -118, -55, 0 },
-		{ 200, -80, 90 },
-		{ -205, -75, 90 },
-		{ 195, 60, 0 },
-		{ -190, 140, 0 },
-		{ 125, 95, 90 },
-		{ -110, 125, 90 },
-		{ 30, 140, 0 },
-		{ -15, 190, 90 },
-		{ 75, 228, 0 },
-		{ -135, 225, 0 },
-		{ 160, -110, 0 },
-		{ -60, -200, 90 },
-		{ 60, -195, 90 },
-		{ 225, 15, 90 },
-		{ -228, -20, 90 },
-		{ 0, 70, 0 },
-	}
-	for _, s in palletSpots do
+	for _, s in
+		{
+			{ 22, -40, 90 },
+			{ -24, 42, 90 },
+			{ -60, 0, 0 },
+			{ 60, 0, 0 },
+			{ -95, -70, 45 },
+			{ 98, 68, 45 },
+			{ -150, -120, 0 },
+			{ 150, 125, 0 },
+			{ 85, -135, 90 },
+			{ -85, 150, 90 },
+			{ 0, -75, 0 },
+			{ 0, 80, 0 },
+			{ -175, -10, 90 },
+			{ 178, -15, 90 },
+			{ -110, 165, 0 },
+			{ 120, -165, 0 },
+		}
+	do
 		table.insert(result.Pallets, Props.PalletSpot(at(s[1], s[2], s[3]), loops))
 		reserve(s[1], s[2], 11)
 	end
-	for _, s in
-		{
-			{ 60, -60, 0 },
-			{ -75, 60, 90 },
-			{ 90, 90, 180 },
-			{ -100, -95, 270 },
-			{ 40, 195, 90 },
-			{ 195, 105, 0 },
-			{ -195, -20, 180 },
-			{ 100, -150, 90 },
-		}
-	do
+	for _, s in { { 30, 110, 0 }, { -38, -112, 90 }, { 140, -30, 180 }, { -140, 60, 270 } } do
 		if isFree(s[1], s[2], 9) then
 			Props.LWall(at(s[1], s[2], s[3]), loops)
 			reserve(s[1], s[2], 10)
 		end
 	end
 
-	buildPathsAndLights(map)
+	-- Set dressing around the buildings
+	local dressing = Instance.new("Folder")
+	dressing.Name = "SetDressing"
+	dressing.Parent = map
+	for _, s in { { -100, -125 }, { -140, -80 }, { 145, 75 }, { 105, 120 } } do
+		tryPlace(s[1], s[2], 7, function(cf)
+			Props.HayStack(cf, dressing)
+		end)
+	end
+	for _, s in { { -60, -150 }, { -30, -145 }, { 75, -50 }, { -82, 50 } } do
+		tryPlace(s[1], s[2], 2.5, function(cf)
+			Props.TireStack(cf, dressing)
+		end)
+	end
+	for _, s in { { 25, 38 }, { -28, -36 }, { 30, -38 }, { -30, 30 } } do
+		tryPlace(s[1], s[2], 3, function(cf)
+			Props.CrateStack(cf, dressing)
+		end)
+	end
+	for _, cage in result.Cages do
+		tryPlace(cage.Position.X + 6, cage.Position.Z - 5, 2, function(cf)
+			Props.Barrel(cf, dressing)
+		end)
+	end
+	for _, pumpkin in result.Pumpkins do
+		tryPlace(pumpkin.Position.X + 8, pumpkin.Position.Z + 5, 3, function(cf)
+			Props.PumpkinPile(cf, dressing)
+		end)
+	end
+	Props.LowFence(Vector3.new(-48, 0, 48), Vector3.new(-48, 0, -48), dressing)
+	Props.LowFence(Vector3.new(48, 0, -48), Vector3.new(48, 0, 20), dressing)
+
+	-- Work lights by the barn doors and the farmhouse yard
+	for _, cf in { barnA * CFrame.new(-8, 0, -16), barnB * CFrame.new(-8, 0, -16), at(-30, 34, 0), at(30, -34, 180), at(-112, 112, 45) } do
+		Props.LampPost(cf, dressing)
+	end
+
+	-- Scarecrows standing in the corn
+	for _ = 1, 14 do
+		tryPlace(rng:NextNumber(-HALF + 20, HALF - 20), rng:NextNumber(-HALF + 20, HALF - 20), 3, function(cf)
+			Props.Scarecrow(cf, dressing)
+		end)
+	end
+
 	buildBoundary(map)
 
-	-- Set dressing: every prop is placed on purpose, around the place it belongs to
-	dressMap(map, pumpkinSpots)
+	-- Finally, plant the corn in everything that's left
+	local corn = Instance.new("Folder")
+	corn.Name = "Cornfield"
+	corn.Parent = map
+	Props.CornField(-HALF + 6, -HALF + 6, HALF - 6, HALF - 6, corn, isFree)
 
-	-- Spawns
 	result.SurvivorSpawns = {
-		CFrame.new(-120, 4, -75),
-		CFrame.new(120, 4, 110),
-		CFrame.new(-110, 4, 215),
-		CFrame.new(215, 4, -75),
-		CFrame.new(-215, 4, 75),
-		CFrame.new(90, 4, -215),
+		CFrame.new(-150, 4, -150),
+		CFrame.new(150, 4, 150),
+		CFrame.new(-160, 4, 150),
+		CFrame.new(160, 4, -150),
+		CFrame.new(-175, 4, 60),
+		CFrame.new(175, 4, -100),
 	}
-	result.KillerSpawn = CFrame.new(0, 4, -40)
+	result.KillerSpawn = CFrame.new(0, 4, -58)
 	result.LobbySpawn = buildLobby(map)
 	result.Half = HALF
 	return result

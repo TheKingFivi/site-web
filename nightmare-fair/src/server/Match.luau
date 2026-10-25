@@ -39,6 +39,9 @@ function Match.IsStandingSurvivor(player: Player): boolean
 	if Match.Role(player) ~= "Survivor" then
 		return false
 	end
+	if player:GetAttribute("Hiding") then
+		return false
+	end
 	local health = Match.Health(player)
 	return health == "Healthy" or health == "Injured"
 end

@@ -11,6 +11,7 @@ local Config = require(Shared.Config)
 local Remotes = require(Shared.Remotes)
 
 local DataService = require(script.Parent.DataService)
+local HideService = require(script.Parent.HideService)
 local KillerLook = require(script.Parent.KillerLook)
 local KillerService = require(script.Parent.KillerService)
 local Match = require(script.Parent.Match)
@@ -33,7 +34,7 @@ local function flat(v: Vector3)
 	return Vector3.new(v.X, 0, v.Z)
 end
 
-local function buildBody(spawnCFrame: CFrame)
+local function buildBody(spawnCFrame: CFrame, killerType: string)
 	local description = Instance.new("HumanoidDescription")
 	description.HeadColor = Color3.fromRGB(230, 225, 215)
 	description.TorsoColor = Color3.fromRGB(30, 10, 18)
@@ -41,9 +42,9 @@ local function buildBody(spawnCFrame: CFrame)
 	description.RightArmColor = Color3.fromRGB(30, 10, 18)
 	description.LeftLegColor = Color3.fromRGB(20, 15, 20)
 	description.RightLegColor = Color3.fromRGB(20, 15, 20)
-	KillerLook.Fill(description, "Ringmaster")
+	KillerLook.Fill(description, killerType)
 	local model = Players:CreateHumanoidModelFromDescription(description, Enum.HumanoidRigType.R15)
-	model.Name = "The Ringmaster"
+	model.Name = Config.Killers[killerType].Name
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.WalkSpeed = SPEED
@@ -53,8 +54,8 @@ local function buildBody(spawnCFrame: CFrame)
 	Match.SetCollisionGroup(model, "Players")
 	local root = model:FindFirstChild("HumanoidRootPart")
 	root:SetNetworkOwner(nil) -- the server drives it
-	KillerService.Dress(model, "Ringmaster")
-	if KillerLook.Has("Ringmaster") then
+	KillerService.Dress(model, killerType)
+	if KillerLook.Has(killerType) then
 		KillerService.StripMask(model)
 	end
 	CollectionService:AddTag(model, "KillerBot")
@@ -245,17 +246,46 @@ local function think()
 	local target = pickTarget()
 	if target then
 		bot.LastSeen = Match.Root(target).Position
+		bot.SearchQueue = nil
 		local root = Match.Root(target)
-		if (root.Position - bot.Root.Position).Magnitude < Config.Attack.Range - 1.5 then
+		local distance = (root.Position - bot.Root.Position).Magnitude
+		-- The Banshee blinks through the air when it spots someone at mid range
+		local info = Config.Killers[bot.Type]
+		if bot.Type == "Banshee" and t > bot.BlinkReadyAt and distance > 10 and distance < info.BlinkDistance + 3 then
+			bot.BlinkReadyAt = t + info.Cooldown + 2
+			bot.SlowedUntil = t + info.BlinkFatigue
+			KillerService.Blink(bot.Model, bot.Root, info, function(victim)
+				bot.AttackReadyAt = 0
+				attack(victim)
+			end, root.Position)
+			return
+		end
+		if distance < Config.Attack.Range - 1.5 then
 			attack(target)
 		end
 		moveTo(root.Position)
 		return
 	end
 
+	-- Lost them? Check the lockers around where they were last seen
+	if bot.SearchQueue and #bot.SearchQueue > 0 then
+		local locker = bot.SearchQueue[1]
+		if (locker.Position - bot.Root.Position).Magnitude < 5.5 then
+			table.remove(bot.SearchQueue, 1)
+			HideService.Search(bot, locker)
+			bot.SlowedUntil = t + 1.2
+		else
+			moveTo(locker.Position)
+		end
+		return
+	end
+
 	-- 4. Investigate the last sighting or noise, then patrol between unlit pumpkins
 	local goal = bot.LastSeen or bot.Noise
 	if goal and (flat(goal) - flat(bot.Root.Position)).Magnitude < 6 then
+		if bot.LastSeen then
+			bot.SearchQueue = { table.unpack(HideService.OccupiedNear(bot.LastSeen, 22), 1, 2) }
+		end
 		bot.LastSeen, bot.Noise = nil, nil
 		goal = nil
 	end
@@ -279,10 +309,14 @@ local function think()
 	moveTo(goal)
 end
 
-function BotKiller.Start()
+-- Starts the AI killer and returns which killer it is (it alternates between the Ringmaster and the Banshee).
+function BotKiller.Start(): string
 	BotKiller.Stop()
-	local model, humanoid, root, tracks = buildBody(Match.Map.KillerSpawn)
+	local killerType = if rng:NextNumber() < 0.5 then "Ringmaster" else "Banshee"
+	local model, humanoid, root, tracks = buildBody(Match.Map.KillerSpawn, killerType)
 	bot = {
+		Type = killerType,
+		BlinkReadyAt = 0,
 		Tracks = tracks,
 		Playing = nil,
 		Model = model,
@@ -296,6 +330,7 @@ function BotKiller.Start()
 		PathGoal = Vector3.zero,
 	}
 	Match.BotModel = model
+	return killerType
 end
 
 function BotKiller.Stop()

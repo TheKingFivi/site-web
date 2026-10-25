@@ -25,7 +25,8 @@ local function refreshPrompt(prompt: ProximityPrompt)
 	local forRole = prompt:GetAttribute("For")
 	local ownerId = prompt:GetAttribute("OwnerId")
 	local role = player:GetAttribute("Role")
-	local visible = forRole == role and ownerId ~= player.UserId
+	local onlyUser = prompt:GetAttribute("OnlyUserId")
+	local visible = forRole == role and ownerId ~= player.UserId and (onlyUser == nil or onlyUser == player.UserId)
 	prompt.MaxActivationDistance = if visible then (prompt:GetAttribute("Range") or 8) else 0
 end
 
@@ -112,7 +113,24 @@ function Effects.Start()
 		end
 	end)
 
-	CollectionService:GetInstanceAddedSignal("RolePrompt"):Connect(refreshPrompt)
+	local function watchPrompt(prompt: ProximityPrompt)
+		prompt:GetAttributeChangedSignal("OnlyUserId"):Connect(function()
+			refreshPrompt(prompt)
+		end)
+		refreshPrompt(prompt)
+	end
+	CollectionService:GetInstanceAddedSignal("RolePrompt"):Connect(watchPrompt)
+	for _, prompt in CollectionService:GetTagged("RolePrompt") do
+		watchPrompt(prompt)
+	end
+
+	-- Inside a locker you look out through the vents in first person
+	player:GetAttributeChangedSignal("Hiding"):Connect(function()
+		player.CameraMode = if player:GetAttribute("Hiding") then Enum.CameraMode.LockFirstPerson else Enum.CameraMode.Classic
+		if not player:GetAttribute("Hiding") then
+			player.CameraMinZoomDistance = 0.5
+		end
+	end)
 	player:GetAttributeChangedSignal("Role"):Connect(refreshAllPrompts)
 	refreshAllPrompts()
 
