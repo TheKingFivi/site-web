@@ -227,7 +227,7 @@ local function partyPad(parent: Instance, index: number, center: Vector3)
 		Color3.fromRGB(30, 30, 36),
 		Enum.Material.Metal
 	)
-	local gui = billboard(post, UDim2.fromOffset(240, 120), Vector3.new(0, 8.5, 0), 220)
+	local gui = billboard(post, UDim2.fromScale(8, 4), Vector3.new(0, 8.5, 0), 220)
 	local frame = Instance.new("Frame")
 	frame.Size = UDim2.fromScale(1, 1)
 	frame.BackgroundColor3 = Color3.fromRGB(245, 247, 252)
@@ -303,7 +303,7 @@ local function pedestal(parent: Instance, cf: CFrame, skin, color: Color3)
 		Enum.Font.GothamBlack
 	)
 	local base = m:FindFirstChildWhichIsA("BasePart") :: BasePart
-	local nameGui = billboard(base, UDim2.fromOffset(200, 40), Vector3.new(0, 9.4, 0), 90)
+	local nameGui = billboard(base, UDim2.fromScale(6, 1.2), Vector3.new(0, 9.4, 0), 90)
 	local name = Instance.new("TextLabel")
 	name.Size = UDim2.fromScale(1, 1)
 	name.BackgroundTransparency = 1

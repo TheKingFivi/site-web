@@ -110,7 +110,7 @@ local function speech(head: BasePart, text: string)
 	end
 	local gui = UI.new("BillboardGui", {
 		Name = "Speech",
-		Size = UDim2.fromOffset(420, 60),
+		Size = UDim2.fromScale(9, 1.3), -- studs, so bubbles shrink with distance
 		StudsOffset = Vector3.new(0, 3.2, 0),
 		MaxDistance = 60,
 		LightInfluence = 0,

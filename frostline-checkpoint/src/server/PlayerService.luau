@@ -24,16 +24,18 @@ local function nameTag(player: Player, char: Model)
 	end
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "ShiftTag"
-	gui.Size = UDim2.fromOffset(190, 64)
+	gui.Size = UDim2.fromScale(5, 1.7) -- studs: shrinks with distance like a real sign
 	gui.StudsOffset = Vector3.new(0, 3, 0)
-	gui.MaxDistance = 90
+	gui.MaxDistance = 70
 	gui.LightInfluence = 0
 	gui.Parent = head
 	local avatar = Instance.new("ImageLabel")
-	avatar.Size = UDim2.fromOffset(40, 40)
+	avatar.Size = UDim2.fromScale(0.21, 0.62)
 	avatar.BackgroundColor3 = Color3.new(1, 1, 1)
 	avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150"
 	avatar.Parent = gui
+	local square = Instance.new("UIAspectRatioConstraint")
+	square.Parent = avatar
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(1, 0)
 	corner.Parent = avatar
@@ -43,8 +45,8 @@ local function nameTag(player: Player, char: Model)
 	stroke.Parent = avatar
 	local shift = Instance.new("TextLabel")
 	shift.Name = "Shift"
-	shift.Position = UDim2.fromOffset(46, 0)
-	shift.Size = UDim2.new(1, -46, 0, 40)
+	shift.Position = UDim2.fromScale(0.24, 0)
+	shift.Size = UDim2.fromScale(0.76, 0.62)
 	shift.BackgroundTransparency = 1
 	shift.Font = Enum.Font.FredokaOne
 	shift.TextScaled = true
@@ -53,8 +55,8 @@ local function nameTag(player: Player, char: Model)
 	shift.TextStrokeTransparency = 0.2
 	shift.Parent = gui
 	local name = Instance.new("TextLabel")
-	name.Position = UDim2.fromOffset(0, 42)
-	name.Size = UDim2.new(1, 0, 0, 20)
+	name.Position = UDim2.fromScale(0, 0.66)
+	name.Size = UDim2.fromScale(1, 0.31)
 	name.BackgroundTransparency = 1
 	name.Font = Enum.Font.GothamBold
 	name.TextScaled = true

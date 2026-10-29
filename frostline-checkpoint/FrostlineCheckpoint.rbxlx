@@ -1596,7 +1596,7 @@ local function partyPad(parent: Instance, index: number, center: Vector3)
 		Color3.fromRGB(30, 30, 36),
 		Enum.Material.Metal
 	)
-	local gui = billboard(post, UDim2.fromOffset(240, 120), Vector3.new(0, 8.5, 0), 220)
+	local gui = billboard(post, UDim2.fromScale(8, 4), Vector3.new(0, 8.5, 0), 220)
 	local frame = Instance.new("Frame")
 	frame.Size = UDim2.fromScale(1, 1)
 	frame.BackgroundColor3 = Color3.fromRGB(245, 247, 252)
@@ -1672,7 +1672,7 @@ local function pedestal(parent: Instance, cf: CFrame, skin, color: Color3)
 		Enum.Font.GothamBlack
 	)
 	local base = m:FindFirstChildWhichIsA("BasePart") :: BasePart
-	local nameGui = billboard(base, UDim2.fromOffset(200, 40), Vector3.new(0, 9.4, 0), 90)
+	local nameGui = billboard(base, UDim2.fromScale(6, 1.2), Vector3.new(0, 9.4, 0), 90)
 	local name = Instance.new("TextLabel")
 	name.Size = UDim2.fromScale(1, 1)
 	name.BackgroundTransparency = 1
@@ -3026,16 +3026,18 @@ local function nameTag(player: Player, char: Model)
 	end
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "ShiftTag"
-	gui.Size = UDim2.fromOffset(190, 64)
+	gui.Size = UDim2.fromScale(5, 1.7) -- studs: shrinks with distance like a real sign
 	gui.StudsOffset = Vector3.new(0, 3, 0)
-	gui.MaxDistance = 90
+	gui.MaxDistance = 70
 	gui.LightInfluence = 0
 	gui.Parent = head
 	local avatar = Instance.new("ImageLabel")
-	avatar.Size = UDim2.fromOffset(40, 40)
+	avatar.Size = UDim2.fromScale(0.21, 0.62)
 	avatar.BackgroundColor3 = Color3.new(1, 1, 1)
 	avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. player.UserId .. "&w=150&h=150"
 	avatar.Parent = gui
+	local square = Instance.new("UIAspectRatioConstraint")
+	square.Parent = avatar
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(1, 0)
 	corner.Parent = avatar
@@ -3045,8 +3047,8 @@ local function nameTag(player: Player, char: Model)
 	stroke.Parent = avatar
 	local shift = Instance.new("TextLabel")
 	shift.Name = "Shift"
-	shift.Position = UDim2.fromOffset(46, 0)
-	shift.Size = UDim2.new(1, -46, 0, 40)
+	shift.Position = UDim2.fromScale(0.24, 0)
+	shift.Size = UDim2.fromScale(0.76, 0.62)
 	shift.BackgroundTransparency = 1
 	shift.Font = Enum.Font.FredokaOne
 	shift.TextScaled = true
@@ -3055,8 +3057,8 @@ local function nameTag(player: Player, char: Model)
 	shift.TextStrokeTransparency = 0.2
 	shift.Parent = gui
 	local name = Instance.new("TextLabel")
-	name.Position = UDim2.fromOffset(0, 42)
-	name.Size = UDim2.new(1, 0, 0, 20)
+	name.Position = UDim2.fromScale(0, 0.66)
+	name.Size = UDim2.fromScale(1, 0.31)
 	name.BackgroundTransparency = 1
 	name.Font = Enum.Font.GothamBold
 	name.TextScaled = true
@@ -6097,7 +6099,7 @@ local function speech(head: BasePart, text: string)
 	end
 	local gui = UI.new("BillboardGui", {
 		Name = "Speech",
-		Size = UDim2.fromOffset(420, 60),
+		Size = UDim2.fromScale(9, 1.3), -- studs, so bubbles shrink with distance
 		StudsOffset = Vector3.new(0, 3.2, 0),
 		MaxDistance = 60,
 		LightInfluence = 0,
