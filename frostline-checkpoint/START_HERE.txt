@@ -1,0 +1,14 @@
+FROSTLINE CHECKPOINT - 4 STEPS
+
+1. Double-click FrostlineCheckpoint.rbxlx  (it opens in Roblox Studio)
+2. In Studio press Ctrl+M  (or File > Import)
+3. Pick FrostlineProps.glb > click Import at the bottom of the window
+   (a pile of furniture appears in the middle - that's fine, leave it)
+4. Press F5 (Play)
+
+The game finds the 14 models by itself and puts them everywhere:
+X-ray machines, scanners, lockers, seats, desks, chairs, coffee and
+vending machines, plants, train, trees, lamps, pumpkins.
+
+Then File > Save to File so you keep it.
+If you see red text in View > Output, send a screenshot.

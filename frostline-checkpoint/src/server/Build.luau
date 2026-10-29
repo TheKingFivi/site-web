@@ -153,21 +153,50 @@ end
 -- X-ray machine renamed "XRayMachine"), place a copy here instead of the part-built version.
 -- `size` is the box it must fit in (studs); it's scaled to fit and stood on the floor at `cf`.
 -- Returns the placed model, or nil so the caller builds its own version.
-function Build.swap(parent: Instance, name: string, cf: CFrame, size: Vector3): Model?
+-- Finds the pro version of `name` inside ReplicatedStorage.ProModels: a Model named exactly `name`
+-- anywhere inside (e.g. in the imported FrostlineProps file), or loose MeshParts named "<name>_..."
+-- (in case Studio's importer flattened the file). Returns a fresh copy, or nil.
+local function findSource(name: string): Model?
 	local folder = ReplicatedStorage:FindFirstChild("ProModels")
-	local source = folder and folder:FindFirstChild(name)
-	if not source then
+	if not folder then
 		return nil
 	end
-	local model: Model
-	if source:IsA("Model") then
-		model = source:Clone()
-	elseif source:IsA("BasePart") then
-		model = Instance.new("Model")
-		source:Clone().Parent = model
-	else
+	local exact = folder:FindFirstChild(name, true)
+	if exact and (exact:IsA("Model") or exact:IsA("Folder")) then
+		local m = Instance.new("Model")
+		for _, child in exact:GetChildren() do
+			child:Clone().Parent = m
+		end
+		if #m:GetChildren() == 0 then
+			return nil
+		end
+		m.WorldPivot = m:GetBoundingBox()
+		return m
+	elseif exact and exact:IsA("BasePart") then
+		local m = Instance.new("Model")
+		exact:Clone().Parent = m
+		return m
+	end
+	local m = Instance.new("Model")
+	for _, d in folder:GetDescendants() do
+		if d:IsA("BasePart") and string.sub(d.Name, 1, #name + 1) == name .. "_" then
+			d:Clone().Parent = m
+		end
+	end
+	if #m:GetChildren() == 0 then
 		return nil
 	end
+	m.WorldPivot = m:GetBoundingBox()
+	return m
+end
+
+function Build.swap(parent: Instance, name: string, cf: CFrame, size: Vector3): Model?
+	local model = findSource(name)
+	if not model then
+		return nil
+	end
+	local folder = ReplicatedStorage:FindFirstChild("ProModels")
+	local source = (folder and folder:FindFirstChild(name, true)) or model
 	-- Optional fixes the owner can set on the source model
 	local turn = source:GetAttribute("Turn") or 0 -- degrees, if the model faces the wrong way
 	local extraScale = source:GetAttribute("Scale") or 1

@@ -48,6 +48,34 @@ grade.Parent = Lighting
 StarterPlayer.CameraMaxZoomDistance = 40
 StarterPlayer.CharacterWalkSpeed = 16
 
+-- Models imported with File → Import (e.g. FrostlineProps.glb) land in the Workspace.
+-- Move them to where the game looks for them, so the owner doesn't have to.
+local proModels = ReplicatedStorage:FindFirstChild("ProModels") or Instance.new("Folder")
+proModels.Name = "ProModels"
+proModels.Parent = ReplicatedStorage
+local PRO_NAMES = {
+	FrostlineProps = true,
+	XRayMachine = true,
+	BodyScanner = true,
+	Locker = true,
+	WaitingChairs = true,
+	OfficeChair = true,
+	OfficeDesk = true,
+	Stanchion = true,
+	CoffeeMachine = true,
+	VendingMachine = true,
+	Plant = true,
+	TrainCar = true,
+	PineTree = true,
+	StreetLamp = true,
+	Pumpkin = true,
+}
+for _, child in workspace:GetChildren() do
+	if PRO_NAMES[child.Name] then
+		child.Parent = proModels
+	end
+end
+
 local lobby = LobbyBuilder.Build(workspace)
 
 -- Supervisor model for the "NEXT OBJECTIVE" portrait
