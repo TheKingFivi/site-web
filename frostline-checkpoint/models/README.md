@@ -39,14 +39,14 @@ See `ALL_MODELS.png` for every model, and `previews/` for close-ups.
 **If something looks off:**
 - **Faces the wrong way:** select the model in ProModels → Properties → **Attributes → +** → Number `Turn` = `180` (or 90 / 270).
 - **Too small or too big:** add a Number attribute `Scale`, for example `1.15`.
-- **No textures, plain grey:** in the import window, open the model's material settings and make sure textures are enabled. Or add a **SurfaceAppearance** to each MeshPart and pick the matching `_color`, `_normal`, `_roughness` and `_metalness` images.
+- **No textures, plain grey:** in the import window, open the model's material settings and make sure textures are enabled. Or add a **SurfaceAppearance** to each MeshPart and pick the matching color, normal, roughness and metalness images (open the .glb in Blender to save them out, or regenerate them with `source/texgen.py`).
 - **Something glows too much or too little:** the glowing parts (screens, lamp bulbs, scanner strips, pumpkin candle) are separate MeshParts. Change their `Material` to **Neon** for a stronger glow, or to SmoothPlastic for less.
 
 ## Floor and wall textures (optional, even better)
 
 `textures/` has 4 seamless texture sets for the station itself: `FloorTerrazzo`, `FloorTiles`, `WallPlaster` and `CarpetBlue`.
 
-1. **View → Asset Manager → Images → Import** the `_color`, `_normal` and `_roughness` images.
+1. **View → Asset Manager → Images → Import** the `_color.jpg`, `_normal.jpg` and `_roughness.jpg` images.
 2. In the Explorer: **MaterialService → + → MaterialVariant**.
    - Name it (for example `Terrazzo`).
    - Set **BaseMaterial = Concrete** (or Plaster for walls, Fabric for carpet).
