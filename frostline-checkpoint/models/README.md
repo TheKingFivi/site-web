@@ -29,6 +29,7 @@ See `ALL_MODELS.png` for every model, and `previews/` for close-ups.
 1. Open `FrostlineCheckpoint.rbxlx` in Roblox Studio.
 2. **File → Import 3D** (or Avatar tab → Import 3D) and choose a file from `glb/`, for example `glb/XRayMachine.glb`.
    - Use the **.glb** files. They carry all 4 texture maps.
+   - `glb_full/` has the **full-quality** originals (PNG textures, about 70 MB in total). `glb/` has the same models with JPEG textures (about 9 MB), which look almost the same after Roblox's own compression.
    - The `fbx/` folder has the same models if you prefer FBX.
 3. In the import window, keep **Import textures** on, then click **Import**. Studio uploads the meshes and textures to *your* account. That's free, and it's the step I can't do for you.
 4. The model appears in the Workspace. In the **Explorer**:
