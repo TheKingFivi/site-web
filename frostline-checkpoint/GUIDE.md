@@ -16,6 +16,8 @@ You can get the same quality **for free** from the Creator Store. This game is b
 
 **Already on:** Roblox's high-detail **2022 materials** (real concrete, metal, wood, fabric and marble textures) are switched on for the whole game.
 
+**NEW: 14 original Blender models are already made for you.** They're in `models/`; see `models/README.md` (import each `.glb` with File → Import 3D and drop it into ReplicatedStorage → ProModels). You can also use Creator Store models instead:
+
 **Swap in pro models:**
 1. Open `FrostlineCheckpoint.rbxlx` in Studio and open the **Toolbox** (View → Toolbox → Creator Store → Models).
 2. Search for the items below. Pick models with a ✔ verified badge and lots of likes, then click to insert them.

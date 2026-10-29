@@ -5146,7 +5146,7 @@ local function buildLane(m: Model, o: CFrame, index: number, L: number)
 	redLed.CanCollide = false
 
 	-- Officer desk behind (PC, phone, chair)
-	if not Build.swap(lane, "OfficeDesk", at(4, 0, -5.5), Vector3.new(8, 3.25, 2.6)) then
+	if not Build.swap(lane, "OfficeDesk", at(4, 0, -5.5) * CFrame.Angles(0, math.pi, 0), Vector3.new(8, 5.2, 2.6)) then
 		Build.part(lane, Vector3.new(8, 0.3, 2.6), at(4, 3.1, -5.5), C.Wood, Enum.Material.WoodPlanks)
 		for _, x in { 0.4, 7.6 } do
 			Build.part(lane, Vector3.new(0.3, 3, 2.4), at(x, 1.5, -5.5), C.DarkMetal, Enum.Material.Metal)
@@ -5207,7 +5207,7 @@ local function buildLane(m: Model, o: CFrame, index: number, L: number)
 
 	-- Body scanner arch (passenger walks into it and raises their arms)
 	local archZ = 11
-	local proArch = Build.swap(lane, "BodyScanner", at(0, 0, archZ) * CFrame.Angles(0, math.pi, 0), Vector3.new(5.4, 9.4, 3))
+	local proArch = Build.swap(lane, "BodyScanner", at(0, 0, archZ) * CFrame.Angles(0, math.pi, 0), Vector3.new(6.9, 9.4, 3))
 	for _, x in if proArch then {} else { -2.2, 2.2 } do
 		Build.part(lane, Vector3.new(0.9, 8.4, 2.4), at(x, 4.2, archZ), Color3.fromRGB(230, 232, 238))
 		local strip = Build.part(lane, Vector3.new(0.1, 7, 0.3), at(x * 0.78, 4.4, archZ), Color3.fromRGB(90, 200, 255), Enum.Material.Neon)
