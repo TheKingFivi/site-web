@@ -2244,6 +2244,11 @@ local Config = require(Shared.Config)
 local Passengers = require(Shared.Passengers)
 local Remotes = require(Shared.Remotes)
 
+local ProBody = require(script.Parent.ProBody)
+
+-- Passenger hair styles -> the Blender Civilian hair pieces
+local PRO_HAIR = { Short = "HairShort", Long = "HairLong", Bun = "HairBun", Pigtails = "HairLong", Spiky = "HairSpiky", Cap = "HairCap" }
+
 local NPC = {}
 
 -- Roblox's default R15 animations (used when Config.Animations is 0)
@@ -2505,11 +2510,13 @@ function NPC.Passenger(record, cf: CFrame, parent: Instance): Model
 		humanoid.WalkSpeed = 9
 		humanoid.BreakJointsOnDeath = false
 	end
-	if not hairId then
+	-- Blender cartoon body, unless the owner configured real catalog clothing
+	local usePro = not (hairId or shirtId or pantsId or faceId) and ProBody.Has("Civilian")
+	if not hairId and not usePro then
 		buildHair(model, record.Look.Hair, Passengers.HairColors[record.Look.HairColor])
 	end
 	-- Shirt sleeves (part-built) so clothes read clearly without catalog items
-	if not shirtId then
+	if not shirtId and not usePro then
 		for _, name in { "LeftUpperArm", "RightUpperArm" } do
 			local arm = model:FindFirstChild(name) :: BasePart?
 			if arm then
@@ -2528,6 +2535,14 @@ function NPC.Passenger(record, cf: CFrame, parent: Instance): Model
 	pcall(function()
 		model:ScaleTo(record.Look.Height)
 	end)
+	if usePro then
+		ProBody.Apply(model, "Civilian", {
+			Skin = skin,
+			Shirt = shirt,
+			Pants = pants,
+			Hair = Passengers.HairColors[record.Look.HairColor],
+		}, PRO_HAIR[record.Look.Hair])
+	end
 	model:PivotTo(cf + Vector3.new(0, 3, 0))
 	model.Parent = parent
 	setGroup(model, "NPC")
@@ -2714,6 +2729,7 @@ function NPC.Monster(cf: CFrame, parent: Instance): Model
 	pcall(function()
 		model:ScaleTo(1.45)
 	end)
+	ProBody.Apply(model, "Monster") -- Blender monster body, when imported
 	model:PivotTo(cf + Vector3.new(0, 4, 0))
 	model.Parent = parent
 	setGroup(model, "NPC")
@@ -2748,8 +2764,9 @@ function NPC.Supervisor(parent: Instance): Model?
 		return nil
 	end
 	model.Name = "Supervisor"
+	local pro = ProBody.Apply(model, "SkinStandard")
 	local head = model:FindFirstChild("Head") :: BasePart?
-	if head then
+	if head and not pro then
 		add(model, head, Vector3.new(1.35, 0.45, 1.35), CFrame.new(0, 0.62, 0), Color3.fromRGB(20, 26, 50), Enum.Material.Fabric)
 		add(model, head, Vector3.new(1.3, 0.1, 0.7), CFrame.new(0, 0.42, -0.75), Color3.fromRGB(10, 10, 14))
 		add(model, head, Vector3.new(0.5, 0.3, 0.05), CFrame.new(0, 0.66, -0.68), Color3.fromRGB(230, 190, 60), Enum.Material.Metal)
@@ -3261,6 +3278,184 @@ return PlayerService
       </Item>
       <Item class="ModuleScript" referent="19">
         <Properties>
+          <string name="Name">ProBody</string>
+          <string name="Source"><![CDATA[-- Blender-made bodies (officer skins, passengers, the monster) worn over a Roblox R15 rig.
+-- The imported pieces are named <Owner>_<BodyPart>_<Role or n> and come with three anchors
+-- (<Owner>_AnchorA/B/C) that mark the modelling frame, so any scale/rotation the importer applied
+-- is undone here. Each piece is welded to its body part, so normal R15 animations move it.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ProBody = {}
+
+-- Reference R15 body the pieces were modelled on (centre relative to UpperTorso, size). Must match
+-- models/source/characters.py.
+local REF = {
+	Head = { Vector3.new(0, 1.45, 0), Vector3.new(1.2, 1.2, 1.2) },
+	UpperTorso = { Vector3.new(0, 0, 0), Vector3.new(2, 1.6, 1) },
+	LowerTorso = { Vector3.new(0, -1.0, 0), Vector3.new(2, 0.4, 1) },
+	LeftUpperArm = { Vector3.new(-1.5, 0.215, 0), Vector3.new(1, 1.17, 1) },
+	RightUpperArm = { Vector3.new(1.5, 0.215, 0), Vector3.new(1, 1.17, 1) },
+	LeftLowerArm = { Vector3.new(-1.5, -0.895, 0), Vector3.new(1, 1.05, 1) },
+	RightLowerArm = { Vector3.new(1.5, -0.895, 0), Vector3.new(1, 1.05, 1) },
+	LeftHand = { Vector3.new(-1.5, -1.57, 0), Vector3.new(1, 0.3, 1) },
+	RightHand = { Vector3.new(1.5, -1.57, 0), Vector3.new(1, 0.3, 1) },
+	LeftUpperLeg = { Vector3.new(-0.5, -1.81, 0), Vector3.new(1, 1.215, 1) },
+	RightUpperLeg = { Vector3.new(0.5, -1.81, 0), Vector3.new(1, 1.215, 1) },
+	LeftLowerLeg = { Vector3.new(-0.5, -3.02, 0), Vector3.new(1, 1.2, 1) },
+	RightLowerLeg = { Vector3.new(0.5, -3.02, 0), Vector3.new(1, 1.2, 1) },
+	LeftFoot = { Vector3.new(-0.5, -3.77, 0), Vector3.new(1, 0.3, 1) },
+	RightFoot = { Vector3.new(0.5, -3.77, 0), Vector3.new(1, 0.3, 1) },
+}
+
+local cache = {} -- [owner] = set | false
+
+local function findPart(folder: Instance, name: string): BasePart?
+	local found = folder:FindFirstChild(name, true)
+	return if found and found:IsA("BasePart") then found else nil
+end
+
+-- Reads the imported pieces for an owner (e.g. "SkinPlague", "Civilian", "Monster") once.
+function ProBody.Set(owner: string)
+	if cache[owner] ~= nil then
+		return cache[owner] or nil
+	end
+	local folder = ReplicatedStorage:FindFirstChild("ProModels")
+	local a = folder and findPart(folder, owner .. "_AnchorA")
+	local b = folder and findPart(folder, owner .. "_AnchorB")
+	local c = folder and findPart(folder, owner .. "_AnchorC")
+	if not (folder and a and b and c) then
+		cache[owner] = false
+		return nil
+	end
+	local origin = a.Position
+	local up = b.Position - origin
+	local right = c.Position - origin
+	local studs = up.Magnitude / 10 -- importer scale
+	local frame = CFrame.fromMatrix(origin, right.Unit, up.Unit)
+	local pieces = {}
+	local prefix = owner .. "_"
+	for _, d in folder:GetDescendants() do
+		if d:IsA("BasePart") and string.sub(d.Name, 1, #prefix) == prefix and not string.find(d.Name, "_Anchor", 1, true) then
+			local rest = string.sub(d.Name, #prefix + 1)
+			local body, role = string.match(rest, "^(%a+)_(.+)$")
+			if body and REF[body] then
+				local inFrame = frame:ToObjectSpace(d.CFrame)
+				local pos = inFrame.Position / studs
+				table.insert(pieces, {
+					Template = d,
+					Body = body,
+					Role = role,
+					Rel = CFrame.new(pos - REF[body][1]) * inFrame.Rotation,
+					Size = d.Size / studs,
+				})
+			end
+		end
+	end
+	local set = if #pieces > 0 then { Pieces = pieces } else false
+	cache[owner] = set
+	return set or nil
+end
+
+function ProBody.Has(owner: string): boolean
+	return ProBody.Set(owner) ~= nil
+end
+
+local function hide(d: Instance)
+	if d:IsA("BasePart") or d:IsA("Decal") then
+		if d:GetAttribute("ProBodyT") == nil then
+			d:SetAttribute("ProBodyT", (d :: any).Transparency)
+		end
+		(d :: any).Transparency = 1
+	end
+end
+
+-- Hides the blocky body parts, their faces and worn accessories (not carried things like the suitcase).
+local function hideOriginal(model: Model)
+	for _, child in model:GetChildren() do
+		if child:IsA("BasePart") and child.Name ~= "HumanoidRootPart" then
+			hide(child)
+			for _, d in child:GetChildren() do
+				hide(d)
+			end
+		elseif child:IsA("Accessory") or (child:IsA("Folder") and (child.Name == "Hair" or child.Name == "SkinParts")) then
+			for _, d in child:GetDescendants() do
+				hide(d)
+			end
+		end
+	end
+end
+
+function ProBody.Remove(model: Model)
+	local old = model:FindFirstChild("ProBody")
+	if old then
+		old:Destroy()
+	end
+	for _, d in model:GetDescendants() do
+		local t = d:GetAttribute("ProBodyT")
+		if t ~= nil and (d:IsA("BasePart") or d:IsA("Decal")) then
+			d.Transparency = t
+			d:SetAttribute("ProBodyT", nil)
+		end
+	end
+end
+
+-- Dresses `model` (an R15 character, NPC or mannequin) in the owner's Blender body.
+-- tints: optional { [role] = Color3 } (e.g. Skin, Shirt, Pants, Hair); hair: the one Hair* role to show.
+-- Returns true when applied (false = no imported pieces; the caller falls back to its own look).
+function ProBody.Apply(model: Model, owner: string, tints: { [string]: Color3 }?, hair: string?): boolean
+	local set = ProBody.Set(owner)
+	if not set then
+		return false
+	end
+	ProBody.Remove(model)
+	local folder = Instance.new("Folder")
+	folder.Name = "ProBody"
+	folder.Parent = model
+	for _, piece in set.Pieces do
+		local role = piece.Role
+		if string.sub(role, 1, 4) == "Hair" and role ~= hair then
+			continue
+		end
+		local bodyPart = model:FindFirstChild(piece.Body) :: BasePart?
+		if not bodyPart then
+			continue
+		end
+		local ratio = bodyPart.Size / REF[piece.Body][2]
+		local localRatio = piece.Rel.Rotation:VectorToObjectSpace(ratio)
+		localRatio = Vector3.new(math.abs(localRatio.X), math.abs(localRatio.Y), math.abs(localRatio.Z))
+		local clone = piece.Template:Clone()
+		clone.Size = piece.Size * localRatio
+		clone.CFrame = bodyPart.CFrame * CFrame.new(piece.Rel.Position * ratio) * piece.Rel.Rotation
+		clone.Anchored = bodyPart.Anchored
+		clone.CanCollide = false
+		clone.CanQuery = false
+		clone.CanTouch = false
+		clone.Massless = true
+		clone.Transparency = 0
+		if tints then
+			local key = if string.sub(role, 1, 4) == "Hair" then "Hair" else role
+			if tints[key] then
+				clone.Color = tints[key]
+			end
+		end
+		if not bodyPart.Anchored then
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = bodyPart
+			weld.Part1 = clone
+			weld.Parent = clone
+		end
+		clone.Parent = folder
+	end
+	hideOriginal(model)
+	return true
+end
+
+return ProBody
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="20">
+        <Properties>
           <string name="Name">Run</string>
           <string name="Source"><![CDATA[-- One shift at one station for one party: lanes, passengers, tools, interrogation, verdicts,
 -- and the blackout when something gets through.
@@ -3467,6 +3662,7 @@ function Run:Start()
 			end
 		end
 		pcall(player.RequestStreamAroundAsync, player, markers.OfficerSpawn.Position)
+		player.CameraMode = Enum.CameraMode.LockFirstPerson -- work the desk in first person
 		teleport(player, markers.OfficerSpawn)
 		giveTaser(player)
 		-- Respawned (reset / fell): put them back at work
@@ -4459,6 +4655,7 @@ function Run:FinishPlayer(lane, survived: boolean, why: string?)
 	Remotes.Blackout:FireClient(player, { Active = false })
 	Run.ByPlayer[player] = nil
 	PlayerService.Unhide(player)
+	player.CameraMode = Enum.CameraMode.Classic
 	player:SetAttribute("Stress", 0)
 	player:SetAttribute("InShift", nil)
 	player:SetAttribute("Lane", nil)
@@ -4542,13 +4739,14 @@ return Run
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">SkinLook</string>
           <string name="Source"><![CDATA[-- Dresses an R15 character (or a lobby mannequin with R15 part names) in an officer skin made of parts.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local ProBody = require(script.Parent.ProBody)
 
 local SkinLook = {}
 
@@ -4740,10 +4938,15 @@ function SkinLook.Clear(model: Model)
 	if old then
 		old:Destroy()
 	end
+	ProBody.Remove(model)
 end
 
 function SkinLook.Apply(model: Model, key: string)
 	SkinLook.Clear(model)
+	-- Blender-made uniform body, when it has been imported
+	if ProBody.Apply(model, "Skin" .. key) then
+		return
+	end
 	local skin = find(key)
 	local folder = Instance.new("Folder")
 	folder.Name = "SkinParts"
@@ -4837,6 +5040,10 @@ function SkinLook.Mannequin(parent: Instance, cf: CFrame, key: string): Model
 	part("RightUpperArm", Vector3.new(0.9, 1.2, 0.9), CFrame.new(1.45, 4.35, 0), skinTone)
 	part("LeftLowerArm", Vector3.new(0.85, 1.1, 0.85), CFrame.new(-1.45, 3.2, 0), skinTone)
 	part("RightLowerArm", Vector3.new(0.85, 1.1, 0.85), CFrame.new(1.45, 3.2, 0), skinTone)
+	part("LeftHand", Vector3.new(0.8, 0.3, 0.8), CFrame.new(-1.45, 2.5, 0), skinTone)
+	part("RightHand", Vector3.new(0.8, 0.3, 0.8), CFrame.new(1.45, 2.5, 0), skinTone)
+	part("LeftFoot", Vector3.new(0.9, 0.3, 0.9), CFrame.new(-0.5, 0.15, 0), Color3.fromRGB(20, 20, 24))
+	part("RightFoot", Vector3.new(0.9, 0.3, 0.9), CFrame.new(0.5, 0.15, 0), Color3.fromRGB(20, 20, 24))
 	local head = part("Head", Vector3.new(1.2, 1.2, 1.2), CFrame.new(0, 5.65, 0), skinTone)
 	local mesh = Instance.new("SpecialMesh")
 	mesh.MeshType = Enum.MeshType.Head
@@ -4861,7 +5068,7 @@ return SkinLook
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">StationBuilder</string>
           <string name="Source"><![CDATA[-- Builds one Frostline checkpoint station: 4 inspection lanes, back rooms, and the snowy train platform.
@@ -5867,19 +6074,19 @@ return StationBuilder
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="22">
+  <Item class="StarterPlayer" referent="23">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="23">
+    <Item class="StarterPlayerScripts" referent="24">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="24">
+      <Item class="Folder" referent="25">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="26">
           <Properties>
             <string name="Name">Audio</string>
             <string name="Source"><![CDATA[-- Sounds: one-shots, 3D sounds, music layers and the heartbeat.
@@ -5984,7 +6191,7 @@ return Audio
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[-- World effects: custom prompts, speech bubbles, bouncing arrows, blackout, stress, jumpscares,
@@ -6430,7 +6637,7 @@ return Effects
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">HUD</string>
             <string name="Source"><![CDATA[-- All 2D UI: lobby buttons, currencies, shift banner, objective card, rank card,
@@ -6680,6 +6887,16 @@ local stressText: TextLabel
 
 local function buildShift()
 	shiftLayer = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = gui })
+	-- Centre dot (first-person aim)
+	local dot = UI.new("Frame", {
+		Size = UDim2.fromOffset(8, 8),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = C.White,
+		Parent = shiftLayer,
+	})
+	UI.corner(dot, 4)
+	UI.stroke(dot, 1.5, C.Black)
 	-- Top banner "Shift 1"
 	local top = UI.new("Frame", {
 		Size = UDim2.new(0.5, 0, 0, 66),
@@ -7403,7 +7620,7 @@ return HUD
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">Inspect</string>
             <string name="Source"><![CDATA[-- The inspection tool panels (passport, X-ray, body scan, CCTV, thermal, lie detector,
@@ -7462,6 +7679,11 @@ local function panel(title: string, color: Color3, size: Vector2): Frame
 	local body = UI.new(
 		"Frame",
 		{ Name = "Body", Size = UDim2.new(1, -24, 1, -64), Position = UDim2.fromOffset(12, 58), BackgroundTransparency = 1, Parent = frame }
+	)
+	-- A visible Modal button frees the mouse in first person while the panel is open
+	UI.new(
+		"TextButton",
+		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(0, 0), Parent = frame }
 	)
 	current = frame
 	UI.pop(frame)
@@ -8176,7 +8398,7 @@ return Inspect
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="29">
+        <Item class="LocalScript" referent="30">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[-- Frostline Checkpoint client entry point.
@@ -8198,7 +8420,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">UI</string>
             <string name="Source"><![CDATA[-- UI building helpers and the game's visual style.
@@ -8410,6 +8632,10 @@ function UI.modal(parent: Instance, subtitle: string, title: string, icon: strin
 		FontFace = UI.Bold,
 	})
 	local _ = close
+	UI.new(
+		"TextButton",
+		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(0, 0), Parent = frame }
+	)
 	local body = UI.new("Frame", {
 		Size = UDim2.new(1, 0, 1, -82),
 		Position = UDim2.fromOffset(0, 82),

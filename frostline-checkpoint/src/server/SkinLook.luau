@@ -2,6 +2,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local ProBody = require(script.Parent.ProBody)
 
 local SkinLook = {}
 
@@ -193,10 +194,15 @@ function SkinLook.Clear(model: Model)
 	if old then
 		old:Destroy()
 	end
+	ProBody.Remove(model)
 end
 
 function SkinLook.Apply(model: Model, key: string)
 	SkinLook.Clear(model)
+	-- Blender-made uniform body, when it has been imported
+	if ProBody.Apply(model, "Skin" .. key) then
+		return
+	end
 	local skin = find(key)
 	local folder = Instance.new("Folder")
 	folder.Name = "SkinParts"
@@ -290,6 +296,10 @@ function SkinLook.Mannequin(parent: Instance, cf: CFrame, key: string): Model
 	part("RightUpperArm", Vector3.new(0.9, 1.2, 0.9), CFrame.new(1.45, 4.35, 0), skinTone)
 	part("LeftLowerArm", Vector3.new(0.85, 1.1, 0.85), CFrame.new(-1.45, 3.2, 0), skinTone)
 	part("RightLowerArm", Vector3.new(0.85, 1.1, 0.85), CFrame.new(1.45, 3.2, 0), skinTone)
+	part("LeftHand", Vector3.new(0.8, 0.3, 0.8), CFrame.new(-1.45, 2.5, 0), skinTone)
+	part("RightHand", Vector3.new(0.8, 0.3, 0.8), CFrame.new(1.45, 2.5, 0), skinTone)
+	part("LeftFoot", Vector3.new(0.9, 0.3, 0.9), CFrame.new(-0.5, 0.15, 0), Color3.fromRGB(20, 20, 24))
+	part("RightFoot", Vector3.new(0.9, 0.3, 0.9), CFrame.new(0.5, 0.15, 0), Color3.fromRGB(20, 20, 24))
 	local head = part("Head", Vector3.new(1.2, 1.2, 1.2), CFrame.new(0, 5.65, 0), skinTone)
 	local mesh = Instance.new("SpecialMesh")
 	mesh.MeshType = Enum.MeshType.Head

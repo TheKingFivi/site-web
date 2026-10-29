@@ -245,6 +245,16 @@ local stressText: TextLabel
 
 local function buildShift()
 	shiftLayer = UI.new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false, Parent = gui })
+	-- Centre dot (first-person aim)
+	local dot = UI.new("Frame", {
+		Size = UDim2.fromOffset(8, 8),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = C.White,
+		Parent = shiftLayer,
+	})
+	UI.corner(dot, 4)
+	UI.stroke(dot, 1.5, C.Black)
 	-- Top banner "Shift 1"
 	local top = UI.new("Frame", {
 		Size = UDim2.new(0.5, 0, 0, 66),

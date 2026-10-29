@@ -55,6 +55,11 @@ local function panel(title: string, color: Color3, size: Vector2): Frame
 		"Frame",
 		{ Name = "Body", Size = UDim2.new(1, -24, 1, -64), Position = UDim2.fromOffset(12, 58), BackgroundTransparency = 1, Parent = frame }
 	)
+	-- A visible Modal button frees the mouse in first person while the panel is open
+	UI.new(
+		"TextButton",
+		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(0, 0), Parent = frame }
+	)
 	current = frame
 	UI.pop(frame)
 	return body

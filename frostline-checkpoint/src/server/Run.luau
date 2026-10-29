@@ -203,6 +203,7 @@ function Run:Start()
 			end
 		end
 		pcall(player.RequestStreamAroundAsync, player, markers.OfficerSpawn.Position)
+		player.CameraMode = Enum.CameraMode.LockFirstPerson -- work the desk in first person
 		teleport(player, markers.OfficerSpawn)
 		giveTaser(player)
 		-- Respawned (reset / fell): put them back at work
@@ -1195,6 +1196,7 @@ function Run:FinishPlayer(lane, survived: boolean, why: string?)
 	Remotes.Blackout:FireClient(player, { Active = false })
 	Run.ByPlayer[player] = nil
 	PlayerService.Unhide(player)
+	player.CameraMode = Enum.CameraMode.Classic
 	player:SetAttribute("Stress", 0)
 	player:SetAttribute("InShift", nil)
 	player:SetAttribute("Lane", nil)

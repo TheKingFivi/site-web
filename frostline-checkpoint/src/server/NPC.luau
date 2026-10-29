@@ -8,6 +8,11 @@ local Config = require(Shared.Config)
 local Passengers = require(Shared.Passengers)
 local Remotes = require(Shared.Remotes)
 
+local ProBody = require(script.Parent.ProBody)
+
+-- Passenger hair styles -> the Blender Civilian hair pieces
+local PRO_HAIR = { Short = "HairShort", Long = "HairLong", Bun = "HairBun", Pigtails = "HairLong", Spiky = "HairSpiky", Cap = "HairCap" }
+
 local NPC = {}
 
 -- Roblox's default R15 animations (used when Config.Animations is 0)
@@ -269,11 +274,13 @@ function NPC.Passenger(record, cf: CFrame, parent: Instance): Model
 		humanoid.WalkSpeed = 9
 		humanoid.BreakJointsOnDeath = false
 	end
-	if not hairId then
+	-- Blender cartoon body, unless the owner configured real catalog clothing
+	local usePro = not (hairId or shirtId or pantsId or faceId) and ProBody.Has("Civilian")
+	if not hairId and not usePro then
 		buildHair(model, record.Look.Hair, Passengers.HairColors[record.Look.HairColor])
 	end
 	-- Shirt sleeves (part-built) so clothes read clearly without catalog items
-	if not shirtId then
+	if not shirtId and not usePro then
 		for _, name in { "LeftUpperArm", "RightUpperArm" } do
 			local arm = model:FindFirstChild(name) :: BasePart?
 			if arm then
@@ -292,6 +299,14 @@ function NPC.Passenger(record, cf: CFrame, parent: Instance): Model
 	pcall(function()
 		model:ScaleTo(record.Look.Height)
 	end)
+	if usePro then
+		ProBody.Apply(model, "Civilian", {
+			Skin = skin,
+			Shirt = shirt,
+			Pants = pants,
+			Hair = Passengers.HairColors[record.Look.HairColor],
+		}, PRO_HAIR[record.Look.Hair])
+	end
 	model:PivotTo(cf + Vector3.new(0, 3, 0))
 	model.Parent = parent
 	setGroup(model, "NPC")
@@ -478,6 +493,7 @@ function NPC.Monster(cf: CFrame, parent: Instance): Model
 	pcall(function()
 		model:ScaleTo(1.45)
 	end)
+	ProBody.Apply(model, "Monster") -- Blender monster body, when imported
 	model:PivotTo(cf + Vector3.new(0, 4, 0))
 	model.Parent = parent
 	setGroup(model, "NPC")
@@ -512,8 +528,9 @@ function NPC.Supervisor(parent: Instance): Model?
 		return nil
 	end
 	model.Name = "Supervisor"
+	local pro = ProBody.Apply(model, "SkinStandard")
 	local head = model:FindFirstChild("Head") :: BasePart?
-	if head then
+	if head and not pro then
 		add(model, head, Vector3.new(1.35, 0.45, 1.35), CFrame.new(0, 0.62, 0), Color3.fromRGB(20, 26, 50), Enum.Material.Fabric)
 		add(model, head, Vector3.new(1.3, 0.1, 0.7), CFrame.new(0, 0.42, -0.75), Color3.fromRGB(10, 10, 14))
 		add(model, head, Vector3.new(0.5, 0.3, 0.05), CFrame.new(0, 0.66, -0.68), Color3.fromRGB(230, 190, 60), Enum.Material.Metal)

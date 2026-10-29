@@ -207,6 +207,10 @@ function UI.modal(parent: Instance, subtitle: string, title: string, icon: strin
 		FontFace = UI.Bold,
 	})
 	local _ = close
+	UI.new(
+		"TextButton",
+		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(0, 0), Parent = frame }
+	)
 	local body = UI.new("Frame", {
 		Size = UDim2.new(1, 0, 1, -82),
 		Position = UDim2.fromOffset(0, 82),
