@@ -28,6 +28,12 @@ local function billboard(parent: BasePart, size: UDim2, offset: Vector3, distanc
 end
 
 local function lamp(parent: Instance, cf: CFrame)
+	local pro = Build.swap(parent, "StreetLamp", cf, Vector3.new(6, 17, 6))
+	if pro then
+		local glow = Build.ghost(parent, Vector3.new(1, 1, 1), cf * CFrame.new(0, 15, -2))
+		Build.spotLight(glow, Enum.NormalId.Bottom, Color3.fromRGB(255, 226, 190), 40, 2.6, 110)
+		return
+	end
 	Build.part(parent, Vector3.new(0.7, 16, 0.7), cf * CFrame.new(0, 8, 0), Color3.fromRGB(30, 32, 38), Enum.Material.Metal)
 	Build.part(parent, Vector3.new(0.4, 0.4, 5), cf * CFrame.new(0, 16, -2.4), Color3.fromRGB(30, 32, 38), Enum.Material.Metal)
 	local head =
@@ -36,6 +42,9 @@ local function lamp(parent: Instance, cf: CFrame)
 end
 
 local function pine(parent: Instance, cf: CFrame, h: number, rng: Random)
+	if Build.swap(parent, "PineTree", cf * CFrame.Angles(0, rng:NextNumber(0, 6), 0), Vector3.new(h * 0.6, h, h * 0.6)) then
+		return
+	end
 	Build.part(parent, Vector3.new(1.4, h * 0.3, 1.4), cf * CFrame.new(0, h * 0.15, 0), Color3.fromRGB(70, 50, 36), Enum.Material.Wood)
 	for tier = 0, 2 do
 		local size = h * (0.55 - tier * 0.15)
@@ -59,6 +68,9 @@ local function pine(parent: Instance, cf: CFrame, h: number, rng: Random)
 end
 
 local function jackOLantern(parent: Instance, cf: CFrame, size: number)
+	if Build.swap(parent, "Pumpkin", cf, Vector3.new(size * 1.3, size * 1.3, size * 1.3)) then
+		return
+	end
 	local body = Build.ball(parent, size, cf * CFrame.new(0, size * 0.4, 0), ORANGE)
 	body.Size = Vector3.new(size * 1.2, size * 0.85, size * 1.2)
 	Build.part(parent, Vector3.new(0.2, 0.5, 0.2) * size, cf * CFrame.new(0, size * 0.9, 0), Color3.fromRGB(60, 90, 30))
@@ -365,20 +377,20 @@ function LobbyBuilder.Build(parent: Instance)
 	local shop = Build.model(lobby, "Shop")
 	Build.part(shop, Vector3.new(16, 9, 10), CFrame.new(34, 4.5, 40), Color3.fromRGB(30, 40, 80), Enum.Material.SmoothPlastic)
 	Build.part(shop, Vector3.new(18, 1, 12), CFrame.new(34, 9.5, 40), Color3.fromRGB(240, 240, 250))
-	local window = Build.part(shop, Vector3.new(12, 4, 0.3), CFrame.new(34, 5, 34.9), Color3.fromRGB(120, 230, 255), Enum.Material.Neon)
+	local window = Build.part(shop, Vector3.new(12, 4, 0.3), CFrame.new(34, 5, 45.1), Color3.fromRGB(120, 230, 255), Enum.Material.Neon)
 	window.Transparency = 0.2
-	local shopSign = Build.part(shop, Vector3.new(14, 3, 0.4), CFrame.new(34, 12, 35), Color3.fromRGB(20, 20, 24))
-	Build.label(shopSign, Enum.NormalId.Front, "🛒 STATION SHOP", Color3.fromRGB(120, 230, 255), Enum.Font.GothamBlack)
+	local shopSign = Build.part(shop, Vector3.new(14, 3, 0.4), CFrame.new(34, 12, 45), Color3.fromRGB(20, 20, 24))
+	Build.label(shopSign, Enum.NormalId.Back, "🛒 STATION SHOP", Color3.fromRGB(120, 230, 255), Enum.Font.GothamBlack)
 	Build.pointLight(window, Color3.fromRGB(120, 230, 255), 22, 1.6)
 	markers.ShopPrompt = Build.prompt(window, "Shop", "Station Shop", 0, 12)
 
 	-- Daily rewards board
 	local daily = Build.model(lobby, "Daily")
-	Build.part(daily, Vector3.new(14, 9, 1), CFrame.new(-34, 6.5, 40) * CFrame.Angles(0, math.rad(20), 0), Color3.fromRGB(20, 20, 24))
+	Build.part(daily, Vector3.new(14, 9, 1), CFrame.new(-34, 6.5, 40) * CFrame.Angles(0, math.rad(200), 0), Color3.fromRGB(20, 20, 24))
 	local dailyFace = Build.part(
 		daily,
 		Vector3.new(13, 8, 0.2),
-		CFrame.new(-34, 6.5, 40) * CFrame.Angles(0, math.rad(20), 0) * CFrame.new(0, 0, -0.6),
+		CFrame.new(-34, 6.5, 40) * CFrame.Angles(0, math.rad(200), 0) * CFrame.new(0, 0, -0.6),
 		Color3.fromRGB(255, 196, 40),
 		Enum.Material.Neon
 	)
@@ -387,7 +399,7 @@ function LobbyBuilder.Build(parent: Instance)
 		Build.part(
 			daily,
 			Vector3.new(0.6, 6, 0.6),
-			CFrame.new(-34, 0, 40) * CFrame.Angles(0, math.rad(20), 0) * CFrame.new(x, 1, 0),
+			CFrame.new(-34, 0, 40) * CFrame.Angles(0, math.rad(200), 0) * CFrame.new(x, 1, 0),
 			Color3.fromRGB(30, 30, 36)
 		)
 	end

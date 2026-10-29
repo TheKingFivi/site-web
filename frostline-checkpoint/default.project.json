@@ -5,6 +5,9 @@
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
+      },
+      "ProModels": {
+        "$className": "Folder"
       }
     },
     "ServerScriptService": {
@@ -24,6 +27,11 @@
         "Technology": "Future",
         "Brightness": 1.5,
         "ClockTime": 1.5
+      }
+    },
+    "MaterialService": {
+      "$properties": {
+        "Use2022Materials": true
       }
     }
   }

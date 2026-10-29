@@ -1,5 +1,6 @@
 -- Small helpers for building the world out of parts.
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Build = {}
 
@@ -146,6 +147,59 @@ function Build.wall(
 	local length = (b - a).Magnitude
 	local cf = CFrame.lookAt(mid, b) * CFrame.Angles(0, math.pi / 2, 0)
 	return Build.part(parent, Vector3.new(length, height, thickness), cf + Vector3.new(0, height / 2, 0), color, material)
+end
+
+-- PRO MODELS: if ReplicatedStorage.ProModels has a model with this name (e.g. a free Creator Store
+-- X-ray machine renamed "XRayMachine"), place a copy here instead of the part-built version.
+-- `size` is the box it must fit in (studs); it's scaled to fit and stood on the floor at `cf`.
+-- Returns the placed model, or nil so the caller builds its own version.
+function Build.swap(parent: Instance, name: string, cf: CFrame, size: Vector3): Model?
+	local folder = ReplicatedStorage:FindFirstChild("ProModels")
+	local source = folder and folder:FindFirstChild(name)
+	if not source then
+		return nil
+	end
+	local model: Model
+	if source:IsA("Model") then
+		model = source:Clone()
+	elseif source:IsA("BasePart") then
+		model = Instance.new("Model")
+		source:Clone().Parent = model
+	else
+		return nil
+	end
+	-- Optional fixes the owner can set on the source model
+	local turn = source:GetAttribute("Turn") or 0 -- degrees, if the model faces the wrong way
+	local extraScale = source:GetAttribute("Scale") or 1
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+		elseif d:IsA("Script") or d:IsA("LocalScript") then
+			d:Destroy() -- free models sometimes carry scripts; never run them
+		end
+	end
+	model:PivotTo(CFrame.new() * CFrame.Angles(0, math.rad(turn), 0))
+	local _, extents = model:GetBoundingBox()
+	local fit = math.min(size.X / extents.X, size.Y / extents.Y, size.Z / extents.Z) * extraScale
+	pcall(function()
+		model:ScaleTo(model:GetScale() * fit)
+	end)
+	local boxCf, boxSize = model:GetBoundingBox()
+	-- Stand it on the floor, centred on cf
+	local offset = model:GetPivot():ToObjectSpace(boxCf)
+	local target = cf * CFrame.new(0, boxSize.Y / 2, 0)
+	model:PivotTo(target * offset:Inverse())
+	model.Name = name
+	model.Parent = parent
+	return model
+end
+
+-- An invisible box that carries prompts/labels when a pro model replaces the visible version.
+function Build.ghost(parent: Instance, size: Vector3, cf: CFrame): Part
+	local p = Build.part(parent, size, cf, Color3.new(), Enum.Material.SmoothPlastic)
+	p.Transparency = 1
+	p.CanCollide = false
+	return p
 end
 
 return Build

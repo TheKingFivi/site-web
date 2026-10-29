@@ -49,20 +49,26 @@ end
 
 local function locker(parent: Instance, cf: CFrame, color: Color3): (Model, ProximityPrompt)
 	local m = Build.model(parent, "Locker")
-	local body = Build.part(m, Vector3.new(3, 7.4, 2.6), cf * CFrame.new(0, 3.7, 0), color, Enum.Material.Metal)
-	body.CanCollide = true
-	local door =
-		Build.part(m, Vector3.new(2.7, 7, 0.12), cf * CFrame.new(0, 3.7, -1.32), color:Lerp(Color3.new(), 0.15), Enum.Material.Metal)
-	for i = 0, 4 do
-		Build.part(m, Vector3.new(1.6, 0.12, 0.06), cf * CFrame.new(0, 6.4 - i * 0.28, -1.4), Color3.fromRGB(20, 20, 20))
+	local pro = Build.swap(m, "Locker", cf, Vector3.new(3, 7.4, 2.6))
+	local body
+	if pro then
+		body = Build.ghost(m, Vector3.new(3, 7.4, 2.6), cf * CFrame.new(0, 3.7, 0))
+	else
+		body = Build.part(m, Vector3.new(3, 7.4, 2.6), cf * CFrame.new(0, 3.7, 0), color, Enum.Material.Metal)
+		body.CanCollide = true
+		local door =
+			Build.part(m, Vector3.new(2.7, 7, 0.12), cf * CFrame.new(0, 3.7, -1.32), color:Lerp(Color3.new(), 0.15), Enum.Material.Metal)
+		door.Name = "Door"
+		for i = 0, 4 do
+			Build.part(m, Vector3.new(1.6, 0.12, 0.06), cf * CFrame.new(0, 6.4 - i * 0.28, -1.4), Color3.fromRGB(20, 20, 20))
+		end
+		Build.part(m, Vector3.new(0.12, 0.6, 0.12), cf * CFrame.new(1, 3.8, -1.42), C.Metal, Enum.Material.Metal)
 	end
-	Build.part(m, Vector3.new(0.12, 0.6, 0.12), cf * CFrame.new(1, 3.8, -1.42), C.Metal, Enum.Material.Metal)
 	local hide = Instance.new("Attachment")
 	hide.Name = "HidePoint"
 	hide.CFrame = CFrame.new(0, -0.6, 0.2) * CFrame.Angles(0, math.pi, 0)
 	hide.Parent = body
 	body.Name = "Body"
-	door.Name = "Door"
 	m.PrimaryPart = body
 	local prompt = Build.prompt(body, "Hide", "Locker", 0, 6)
 	CollectionService:AddTag(m, "HideLocker")
@@ -70,6 +76,9 @@ local function locker(parent: Instance, cf: CFrame, color: Color3): (Model, Prox
 end
 
 local function chairRow(parent: Instance, cf: CFrame, seats: number)
+	if Build.swap(parent, "WaitingChairs", cf, Vector3.new(seats * 2.4, 4.2, 2.4)) then
+		return
+	end
 	for i = 0, seats - 1 do
 		local s = cf * CFrame.new((i - (seats - 1) / 2) * 2.4, 0, 0)
 		Build.part(parent, Vector3.new(2.1, 0.4, 2), s * CFrame.new(0, 1.8, 0), C.Seat)
@@ -84,6 +93,9 @@ end
 
 local function stanchion(parent: Instance, a: Vector3, b: Vector3)
 	for _, p in { a, b } do
+		if Build.swap(parent, "Stanchion", CFrame.new(p), Vector3.new(1, 3.2, 1)) then
+			continue
+		end
 		Build.part(parent, Vector3.new(1, 0.2, 1), CFrame.new(p + Vector3.new(0, 0.1, 0)), C.Metal, Enum.Material.Metal)
 		Build.cyl(parent, 3, 0.3, CFrame.new(p + Vector3.new(0, 1.6, 0)) * CFrame.Angles(0, 0, math.pi / 2), C.Metal, Enum.Material.Metal)
 	end
@@ -120,6 +132,9 @@ local function garland(parent: Instance, a: Vector3, b: Vector3, flags: number)
 end
 
 local function pumpkin(parent: Instance, cf: CFrame, size: number)
+	if Build.swap(parent, "Pumpkin", cf, Vector3.new(size * 1.3, size * 1.3, size * 1.3)) then
+		return
+	end
 	local p = Build.ball(parent, size, cf * CFrame.new(0, size * 0.4, 0), C.Orange, Enum.Material.SmoothPlastic)
 	p.Size = Vector3.new(size * 1.15, size * 0.85, size * 1.15)
 	p.Shape = Enum.PartType.Ball
@@ -265,7 +280,7 @@ local function buildLane(m: Model, o: CFrame, index: number, L: number)
 		Build.cyl(lane, 1, 0.35, at(x, 4.5, -0.6) * CFrame.Angles(0, 0, math.pi / 2), C.Wood, Enum.Material.Wood)
 		Build.ball(lane, 0.6, at(x, 5.05, -0.6), C.Wood, Enum.Material.Wood)
 		local tag = Build.part(lane, Vector3.new(1.6, 0.5, 0.05), at(x, 3.95, -1.25), Color3.fromRGB(20, 20, 20))
-		Build.label(tag, Enum.NormalId.Back, text, color, Enum.Font.GothamBlack)
+		Build.label(tag, Enum.NormalId.Front, text, color, Enum.Font.GothamBlack)
 		return base
 	end
 	local approve = stamp(-5, Color3.fromRGB(40, 190, 80), "APPROVE")
@@ -286,7 +301,7 @@ local function buildLane(m: Model, o: CFrame, index: number, L: number)
 	local phone = Build.part(lane, Vector3.new(1.2, 0.5, 0.9), at(-11, 3.9, -0.6), Color3.fromRGB(170, 20, 24))
 	Build.part(lane, Vector3.new(1.3, 0.3, 0.4), at(-11, 4.3, -0.6), Color3.fromRGB(120, 10, 14))
 	local phoneTag = Build.part(lane, Vector3.new(1.8, 0.45, 0.05), at(-11, 3.9, -1.08), Color3.fromRGB(20, 20, 20))
-	Build.label(phoneTag, Enum.NormalId.Back, "INTERROGATION", Color3.fromRGB(255, 80, 80), Enum.Font.GothamBlack)
+	Build.label(phoneTag, Enum.NormalId.Front, "INTERROGATION", Color3.fromRGB(255, 80, 80), Enum.Font.GothamBlack)
 	markers.Prompts.Interrogate = addPrompt(phone, "Interrogate", "Send to room " .. index, 0.6, 6)
 	markers.Prompts.Interrogate.KeyboardKeyCode = Enum.KeyCode.Q
 
@@ -298,11 +313,11 @@ local function buildLane(m: Model, o: CFrame, index: number, L: number)
 	markers.Prompts.Thermal.KeyboardKeyCode = Enum.KeyCode.T
 
 	-- X-ray monitor and body-scan monitor (face the officer: -Z)
-	local xrayScreen, xrayLabel = monitor(lane, at(6.5, 5.4, -0.5) * CFrame.Angles(0, math.pi, 0), 2.6, 1.7, "X-RAY\nWAITING")
+	local xrayScreen, xrayLabel = monitor(lane, at(6.5, 5.4, -0.5), 2.6, 1.7, "X-RAY\nWAITING")
 	markers.Prompts.XRay = addPrompt(xrayScreen, "X-Ray", "Monitor", 0, 7)
 	markers.Prompts.XRay.KeyboardKeyCode = Enum.KeyCode.X
 	markers.XRayLabel = xrayLabel
-	local scanScreen, scanLabel = monitor(lane, at(9.6, 5.4, -0.5) * CFrame.Angles(0, math.pi, 0), 2.6, 1.7, "BODY SCAN\nWAITING")
+	local scanScreen, scanLabel = monitor(lane, at(9.6, 5.4, -0.5), 2.6, 1.7, "BODY SCAN\nWAITING")
 	markers.Prompts.Skeleton = addPrompt(scanScreen, "Body Scan", "Monitor", 0, 7)
 	markers.Prompts.Skeleton.KeyboardKeyCode = Enum.KeyCode.B
 	markers.ScanLabel = scanLabel
@@ -324,9 +339,11 @@ local function buildLane(m: Model, o: CFrame, index: number, L: number)
 	redLed.CanCollide = false
 
 	-- Officer desk behind (PC, phone, chair)
-	Build.part(lane, Vector3.new(8, 0.3, 2.6), at(4, 3.1, -5.5), C.Wood, Enum.Material.WoodPlanks)
-	for _, x in { 0.4, 7.6 } do
-		Build.part(lane, Vector3.new(0.3, 3, 2.4), at(x, 1.5, -5.5), C.DarkMetal, Enum.Material.Metal)
+	if not Build.swap(lane, "OfficeDesk", at(4, 0, -5.5), Vector3.new(8, 3.25, 2.6)) then
+		Build.part(lane, Vector3.new(8, 0.3, 2.6), at(4, 3.1, -5.5), C.Wood, Enum.Material.WoodPlanks)
+		for _, x in { 0.4, 7.6 } do
+			Build.part(lane, Vector3.new(0.3, 3, 2.4), at(x, 1.5, -5.5), C.DarkMetal, Enum.Material.Metal)
+		end
 	end
 	monitor(lane, at(4, 4.7, -6) * CFrame.Angles(0, math.pi, 0), 2.2, 1.4, "FROSTLINE OS\nLOGGED IN")
 	Build.part(lane, Vector3.new(2, 0.1, 0.7), at(4, 3.3, -5), Color3.fromRGB(30, 30, 30))
@@ -334,9 +351,11 @@ local function buildLane(m: Model, o: CFrame, index: number, L: number)
 	local mug = Build.cyl(lane, 0.5, 0.4, at(1.5, 3.5, -5.2) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(250, 250, 250))
 	mug.CanCollide = false
 	-- Office chair
-	Build.part(lane, Vector3.new(1.8, 0.4, 1.8), at(-1, 2, -3.6), Color3.fromRGB(20, 20, 24))
-	Build.part(lane, Vector3.new(1.8, 2, 0.3), at(-1, 3.2, -4.5), Color3.fromRGB(20, 20, 24))
-	Build.cyl(lane, 1.6, 0.3, at(-1, 1, -3.6) * CFrame.Angles(0, 0, math.pi / 2), C.Metal, Enum.Material.Metal)
+	if not Build.swap(lane, "OfficeChair", at(-1, 0, -3.8) * CFrame.Angles(0, math.pi, 0), Vector3.new(2.2, 4.4, 2.2)) then
+		Build.part(lane, Vector3.new(1.8, 0.4, 1.8), at(-1, 2, -3.6), Color3.fromRGB(20, 20, 24))
+		Build.part(lane, Vector3.new(1.8, 2, 0.3), at(-1, 3.2, -4.5), Color3.fromRGB(20, 20, 24))
+		Build.cyl(lane, 1.6, 0.3, at(-1, 1, -3.6) * CFrame.Angles(0, 0, math.pi / 2), C.Metal, Enum.Material.Metal)
+	end
 
 	-- Partition walls between lanes (officer side), with a navy stripe
 	for _, x in { -12, 12 } do
@@ -352,41 +371,50 @@ local function buildLane(m: Model, o: CFrame, index: number, L: number)
 
 	-- X-ray conveyor: along Z on the passenger side at x = +7.5, from z=22 to z=3
 	local beltX = 7.5
-	Build.part(lane, Vector3.new(3, 2.6, 19), at(beltX, 1.3, 12.5), C.Counter)
-	local belt = Build.part(lane, Vector3.new(2.6, 0.12, 19), at(beltX, 2.66, 12.5), Color3.fromRGB(26, 26, 28), Enum.Material.Fabric)
-	belt.Name = "Belt"
-	-- Rollers detail
-	for z = 4, 21, 1.5 do
-		Build.part(lane, Vector3.new(2.7, 0.05, 0.1), at(beltX, 2.73, z), Color3.fromRGB(60, 60, 64))
-	end
-	-- Tunnel housing with lead curtains
-	Build.part(lane, Vector3.new(3.6, 3.6, 6), at(beltX, 4.5, 12), Color3.fromRGB(220, 222, 228))
-	Build.part(lane, Vector3.new(0.3, 4.2, 6), at(beltX - 1.8, 2.4, 12), Color3.fromRGB(220, 222, 228))
-	Build.part(lane, Vector3.new(0.3, 4.2, 6), at(beltX + 1.8, 2.4, 12), Color3.fromRGB(220, 222, 228))
-	for _, z in { 9, 15 } do
-		for i = -1, 1 do
-			local strip = Build.part(lane, Vector3.new(0.75, 2, 0.05), at(beltX + i * 0.85, 3.7, z), Color3.fromRGB(40, 40, 46))
-			strip.CanCollide = false
-			strip.Transparency = 0.2
+	-- The machine faces the passenger (-Z of a pro model points at the queue). Fits a 3.6 x 6.5 x 19 box.
+	if not Build.swap(lane, "XRayMachine", at(beltX, 0, 12.5) * CFrame.Angles(0, math.pi, 0), Vector3.new(3.8, 6.5, 19)) then
+		Build.part(lane, Vector3.new(3, 2.6, 19), at(beltX, 1.3, 12.5), C.Counter)
+		local belt = Build.part(lane, Vector3.new(2.6, 0.12, 19), at(beltX, 2.66, 12.5), Color3.fromRGB(26, 26, 28), Enum.Material.Fabric)
+		belt.Name = "Belt"
+		-- Rollers detail
+		for z = 4, 21, 1.5 do
+			Build.part(lane, Vector3.new(2.7, 0.05, 0.1), at(beltX, 2.73, z), Color3.fromRGB(60, 60, 64))
 		end
+		-- Tunnel housing with lead curtains
+		Build.part(lane, Vector3.new(3.6, 3.6, 6), at(beltX, 4.5, 12), Color3.fromRGB(220, 222, 228))
+		Build.part(lane, Vector3.new(0.3, 4.2, 6), at(beltX - 1.8, 2.4, 12), Color3.fromRGB(220, 222, 228))
+		Build.part(lane, Vector3.new(0.3, 4.2, 6), at(beltX + 1.8, 2.4, 12), Color3.fromRGB(220, 222, 228))
+		for _, z in { 9, 15 } do
+			for i = -1, 1 do
+				local strip = Build.part(lane, Vector3.new(0.75, 2, 0.05), at(beltX + i * 0.85, 3.7, z), Color3.fromRGB(40, 40, 46))
+				strip.CanCollide = false
+				strip.Transparency = 0.2
+			end
+		end
+		local xlogo = Build.part(lane, Vector3.new(0.05, 1, 3), at(beltX - 1.83, 4.5, 12), Color3.fromRGB(240, 210, 40))
+		Build.label(xlogo, Enum.NormalId.Left, "☢ X-RAY", Color3.fromRGB(20, 20, 20), Enum.Font.GothamBlack)
 	end
-	local xlogo = Build.part(lane, Vector3.new(0.05, 1, 3), at(beltX - 1.83, 4.5, 12), Color3.fromRGB(240, 210, 40))
-	Build.label(xlogo, Enum.NormalId.Left, "☢ X-RAY", Color3.fromRGB(20, 20, 20), Enum.Font.GothamBlack)
 	markers.BagStart = at(beltX, 3.3, 20.5)
 	markers.BagMid = at(beltX, 3.3, 12)
 	markers.BagEnd = at(beltX, 3.3, 4)
 
 	-- Body scanner arch (passenger walks into it and raises their arms)
 	local archZ = 11
-	for _, x in { -2.2, 2.2 } do
+	local proArch = Build.swap(lane, "BodyScanner", at(0, 0, archZ) * CFrame.Angles(0, math.pi, 0), Vector3.new(5.4, 9.4, 3))
+	for _, x in if proArch then {} else { -2.2, 2.2 } do
 		Build.part(lane, Vector3.new(0.9, 8.4, 2.4), at(x, 4.2, archZ), Color3.fromRGB(230, 232, 238))
 		local strip = Build.part(lane, Vector3.new(0.1, 7, 0.3), at(x * 0.78, 4.4, archZ), Color3.fromRGB(90, 200, 255), Enum.Material.Neon)
 		strip.CanCollide = false
 		CollectionService:AddTag(strip, "PowerScreen")
 	end
-	Build.part(lane, Vector3.new(5.3, 1, 2.4), at(0, 8.9, archZ), Color3.fromRGB(230, 232, 238))
+	if not proArch then
+		Build.part(lane, Vector3.new(5.3, 1, 2.4), at(0, 8.9, archZ), Color3.fromRGB(230, 232, 238))
+	end
 	local scanLight = Build.part(lane, Vector3.new(3.4, 0.1, 0.4), at(0, 8.35, archZ), Color3.fromRGB(90, 200, 255), Enum.Material.Neon)
 	scanLight.CanCollide = false
+	if proArch then
+		scanLight.Transparency = 1
+	end
 	markers.ScanLight = scanLight
 	local pad = Build.part(lane, Vector3.new(3.4, 0.08, 2.2), at(0, 0.04, archZ), Color3.fromRGB(240, 200, 40))
 	Build.label(pad, Enum.NormalId.Top, "STAND HERE", Color3.fromRGB(20, 20, 20), Enum.Font.GothamBlack)
@@ -456,9 +484,15 @@ local function buildBackRooms(m: Model, o: CFrame, markers)
 	for x = -12, 12, 8 do
 		Build.ceilingLight(rooms, at(x, HALL.H - 0.2, -31), 22)
 	end
-	local machine = Build.part(rooms, Vector3.new(3, 6, 2.4), at(-13, 3, -40.5), Color3.fromRGB(40, 40, 46), Enum.Material.Metal)
+	local proCoffee = Build.swap(rooms, "CoffeeMachine", at(-13, 0, -40.5) * CFrame.Angles(0, math.pi, 0), Vector3.new(3.4, 6, 2.6))
+	local machine = if proCoffee
+		then Build.ghost(rooms, Vector3.new(3, 6, 2.4), at(-13, 3, -40.5))
+		else Build.part(rooms, Vector3.new(3, 6, 2.4), at(-13, 3, -40.5), Color3.fromRGB(40, 40, 46), Enum.Material.Metal)
 	local machineFront = Build.part(rooms, Vector3.new(2.4, 2, 0.1), at(-13, 4.4, -39.25), Color3.fromRGB(120, 60, 30), Enum.Material.Neon)
 	Build.label(machineFront, Enum.NormalId.Back, "☕ HOT COFFEE", Color3.new(1, 1, 1), Enum.Font.GothamBlack)
+	if proCoffee then
+		machineFront:Destroy()
+	end
 	CollectionService:AddTag(machineFront, "PowerScreen")
 	markers.Coffee = Build.prompt(machine, "Drink coffee", "Calms your nerves", 1.5, 7)
 	local clock = Build.part(rooms, Vector3.new(2.6, 3.4, 1), at(-5, 5, -41.4), Color3.fromRGB(190, 190, 196), Enum.Material.Metal)
@@ -476,12 +510,12 @@ local function buildBackRooms(m: Model, o: CFrame, markers)
 	Build.part(rooms, Vector3.new(9, 1.6, 3), at(9, 0.8, -39.5), Color3.fromRGB(110, 40, 40), Enum.Material.Fabric)
 	Build.part(rooms, Vector3.new(9, 3, 1), at(9, 2, -41), Color3.fromRGB(110, 40, 40), Enum.Material.Fabric)
 	-- TV
-	monitor(rooms, at(9, 9, -41.3), 6, 3.4, "📺 FROSTLINE NEWS\nBLIZZARD WARNING TONIGHT")
+	monitor(rooms, at(9, 9, -41.3) * CFrame.Angles(0, math.pi, 0), 6, 3.4, "📺 FROSTLINE NEWS\nBLIZZARD WARNING TONIGHT")
 	-- Fridge
 	Build.part(rooms, Vector3.new(3, 7, 3), at(15, 3.5, -38), Color3.fromRGB(235, 235, 240), Enum.Material.Metal)
 	poster(
 		rooms,
-		at(-16.5, 6, -28) * CFrame.Angles(0, math.pi / 2, 0),
+		at(-16.5, 6, -28) * CFrame.Angles(0, -math.pi / 2, 0),
 		Vector2.new(4, 5),
 		"TAKE A\nBREATH.\nOne shift at a time.",
 		Color3.fromRGB(220, 235, 255),
@@ -625,15 +659,19 @@ local function buildHallDecor(m: Model, o: CFrame, markers)
 	end
 	-- Plants, bins, wet-floor sign, vending machine
 	for _, x in { -48, 48 } do
+		if Build.swap(decor, "Plant", at(x, 0, 39), Vector3.new(3.4, 6, 3.4)) then
+			continue
+		end
 		Build.cyl(decor, 2, 2, at(x, 1, 39) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(70, 60, 50))
 		local leaves = Build.ball(decor, 3.4, at(x, 3.6, 39), Color3.fromRGB(40, 110, 50), Enum.Material.Grass)
 		leaves.Size = Vector3.new(3, 4, 3)
 	end
-	local vend = Build.part(decor, Vector3.new(4, 7.5, 3), at(-46, 3.75, 50.5), Color3.fromRGB(180, 30, 40))
-	local vendFront = Build.part(decor, Vector3.new(2.6, 5, 0.1), at(-46.4, 4.4, 49), Color3.fromRGB(200, 230, 255), Enum.Material.Neon)
-	vendFront.Transparency = 0.3
-	CollectionService:AddTag(vendFront, "PowerScreen")
-	local _ = vend
+	if not Build.swap(decor, "VendingMachine", at(-46, 0, 50.5), Vector3.new(4, 7.5, 3)) then
+		Build.part(decor, Vector3.new(4, 7.5, 3), at(-46, 3.75, 50.5), Color3.fromRGB(180, 30, 40))
+		local vendFront = Build.part(decor, Vector3.new(2.6, 5, 0.1), at(-46.4, 4.4, 49), Color3.fromRGB(200, 230, 255), Enum.Material.Neon)
+		vendFront.Transparency = 0.3
+		CollectionService:AddTag(vendFront, "PowerScreen")
+	end
 	local wet = Build.wedge(decor, Vector3.new(1.4, 2.6, 1.2), at(-44, 1.3, 47), Color3.fromRGB(250, 210, 30))
 	Build.label(wet, Enum.NormalId.Front, "⚠ WET", Color3.fromRGB(20, 20, 20), Enum.Font.GothamBlack)
 	-- Platform door sign
@@ -698,6 +736,9 @@ local function buildPlatform(m: Model, o: CFrame, markers)
 	local train = Build.model(plat, "Train")
 	for car = 0, 2 do
 		local z = -40 + car * 44
+		if Build.swap(train, "TrainCar", at(72.5, 0.6, z), Vector3.new(9.6, 12, 43)) then
+			continue
+		end
 		local body = Build.part(train, Vector3.new(9.4, 10, 42), at(72.5, 6.4, z), Color3.fromRGB(26, 40, 64), Enum.Material.Metal)
 		Build.part(train, Vector3.new(9.6, 1, 42.2), at(72.5, 4, z), Color3.fromRGB(150, 20, 26), Enum.Material.Metal)
 		Build.part(train, Vector3.new(8.6, 1, 41), at(72.5, 11.8, z), Color3.fromRGB(60, 64, 70), Enum.Material.Metal)
@@ -745,6 +786,9 @@ local function buildPlatform(m: Model, o: CFrame, markers)
 		local x, z = math.cos(angle) * dist, math.sin(angle) * dist
 		if not (x > 50 and x < 100) then
 			local h = rng:NextNumber(18, 34)
+			if Build.swap(plat, "PineTree", at(x, 0, z) * CFrame.Angles(0, rng:NextNumber(0, 6), 0), Vector3.new(h * 0.6, h, h * 0.6)) then
+				continue
+			end
 			Build.part(plat, Vector3.new(1.4, h * 0.3, 1.4), at(x, h * 0.15, z), Color3.fromRGB(70, 50, 36), Enum.Material.Wood)
 			for tier = 0, 2 do
 				local size = h * (0.55 - tier * 0.15)

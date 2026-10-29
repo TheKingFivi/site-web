@@ -9,6 +9,44 @@ All of the code, art, map and sounds here were made from scratch for this game.
 
 ---
 
+## 0. ⭐ Make it look PROFESSIONAL (10 minutes, do this first)
+
+The game is built from Roblox parts, which look clean but simple. Top games like Airport Security use **detailed 3D models**.
+You can get the same quality **for free** from the Creator Store. This game is built to swap them in automatically.
+
+**Already on:** Roblox's high-detail **2022 materials** (real concrete, metal, wood, fabric and marble textures) are switched on for the whole game.
+
+**Swap in pro models:**
+1. Open `FrostlineCheckpoint.rbxlx` in Studio and open the **Toolbox** (View → Toolbox → Creator Store → Models).
+2. Search for the items below. Pick models with a ✔ verified badge and lots of likes, then click to insert them.
+3. In the Explorer, **rename** each model to the exact name in the table and drag it into **ReplicatedStorage → ProModels**.
+4. Press Play. Every copy in the game (all 4 lanes, every station) now uses your model, automatically **sized and placed**. Lockers still let you hide, the coffee machine still works, and so on.
+
+| Name in ProModels | Search the Toolbox for | Replaces |
+|---|---|---|
+| `XRayMachine` | "airport x-ray machine", "baggage scanner" | The X-ray conveyor at every lane |
+| `BodyScanner` | "airport body scanner", "metal detector" | The scanner arch |
+| `Locker` | "metal locker" | All 11 hiding lockers |
+| `WaitingChairs` | "airport seats", "waiting room chairs" | Waiting-hall seat rows |
+| `OfficeChair` | "office chair" | Officer chairs |
+| `OfficeDesk` | "office desk" | Desk behind each officer |
+| `Stanchion` | "queue stanchion", "belt barrier" | Queue posts |
+| `CoffeeMachine` | "coffee machine" | Break-room coffee (still calms you) |
+| `VendingMachine` | "vending machine" | Hall vending machine |
+| `Plant` | "potted plant" | Hall plants |
+| `TrainCar` | "train carriage", "passenger train car" | The 3 night-train carriages |
+| `PineTree` | "snowy pine tree" | All pine trees (lobby + station) |
+| `StreetLamp` | "street lamp" | Lobby lamps |
+| `Pumpkin` | "jack o lantern" | All Halloween pumpkins |
+
+**If a model faces the wrong way:** select it in ProModels → Properties → **Attributes → +** → add a number named `Turn` (try 90, 180 or 270).
+**Too small or too big:** add a number attribute `Scale` (for example 1.2).
+Any scripts inside free models are deleted automatically for safety.
+
+**Also worth adding** (these are environment details, so place them in the map by hand): wall clocks, posters, security cameras, ceiling vents, a flag, a fire extinguisher. Grab them from the Toolbox and drop them anywhere in the station.
+
+---
+
 ## 1. How it plays
 
 ### The lobby (like your screenshots)
@@ -176,6 +214,7 @@ Roblox limits audio uploads per month, so upload these first: MonsterScreech, Ju
   - The lobby and station builders were run in a Roblox emulator: 1,290 lobby parts and about 1,700 per station, no errors.
   - Every passenger walking route was collision-checked against the map.
   - The passenger generator was run 27,000 times: every anomaly is catchable with the tools you have that shift, and the right answer is always consistent.
+- **About my preview pictures:** any image I render outside Roblox (thumbnails, mock-ups) is drawn by me, not Roblox. The real game shows players' **own avatars**, Roblox's 2022 textures and its Future lighting, plus any pro models you add.
 - **Not yet tested in real Roblox:** the code hasn't been play-tested there. Test a few shifts alone and with a friend before advertising, and send me any red errors from the Output window.
 - **Animations:** the characters use Roblox's default walk, idle and run animations plus joint poses. For cinematic animations, make them in the Animation Editor or Moon Animator (both run on your computer) and paste the IDs into Config.
 - **Copying:** this is the same *type* of game as Airport Security (Anomaly), but with its own setting, art, code and sounds. Don't copy their name, logo or images.
@@ -184,7 +223,8 @@ Roblox limits audio uploads per month, so upload these first: MonsterScreech, Ju
 ```
 src/shared/  Config (balance, passes, products, skins, sounds, animations), Passengers (generator + rules + judge),
              Format, Remotes
-src/server/  Main               entry point, lighting, remotes
+src/server/  Build              part helpers + Pro Model swap
+             Main               entry point, lighting, remotes
              LobbyBuilder       snowy plaza, party pads, skin pedestals, shop, daily board
              StationBuilder     4-lane checkpoint, back rooms, interrogation wing, platform + train
              Build              part helpers
