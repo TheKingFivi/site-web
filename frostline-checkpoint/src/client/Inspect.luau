@@ -58,7 +58,7 @@ local function panel(title: string, color: Color3, size: Vector2): Frame
 	-- A visible Modal button frees the mouse in first person while the panel is open
 	UI.new(
 		"TextButton",
-		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(0, 0), Parent = frame }
+		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(1, 1), Parent = frame }
 	)
 	current = frame
 	UI.pop(frame)
@@ -239,10 +239,16 @@ function tools.Passport(data)
 	})
 	-- Stamp buttons
 	UI.button(body, "✔ APPROVE (F)", C.Green, function()
-		Remotes.Decide:InvokeServer(true)
+		local ok, why = Remotes.Decide:InvokeServer(true)
+		if not ok and why and Inspect.Toast then
+			Inspect.Toast(why, "warn")
+		end
 	end, { Size = UDim2.fromOffset(330, 70), Position = UDim2.fromOffset(10, 352) })
 	UI.button(body, "✖ DENY (G)", C.Red, function()
-		Remotes.Decide:InvokeServer(false)
+		local ok, why = Remotes.Decide:InvokeServer(false)
+		if not ok and why and Inspect.Toast then
+			Inspect.Toast(why, "warn")
+		end
 	end, { Size = UDim2.fromOffset(330, 70), Position = UDim2.fromOffset(356, 352) })
 end
 

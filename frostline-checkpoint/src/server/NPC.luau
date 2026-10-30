@@ -334,15 +334,31 @@ function NPC.WalkTo(model: Model, target: Vector3, timeout: number?): boolean
 		return false
 	end
 	local deadline = os.clock() + (timeout or 20)
+	local best, lastProgress = math.huge, os.clock()
 	while model.Parent and os.clock() < deadline do
 		humanoid:MoveTo(target)
 		local flat = Vector3.new(hrp.Position.X - target.X, 0, hrp.Position.Z - target.Z)
-		if flat.Magnitude < 1.6 then
+		local dist = flat.Magnitude
+		if dist < 1.6 then
+			return true
+		end
+		if dist < best - 0.3 then
+			best, lastProgress = dist, os.clock()
+		elseif os.clock() - lastProgress > 1.5 then
+			humanoid.Jump = true -- bumped into something: hop over it
+		end
+		if os.clock() - lastProgress > 3.5 then
+			-- Still stuck: skip to the spot so the shift never stalls
+			warn("[NPC] " .. model.Name .. " was stuck; moving it to its next spot")
+			model:PivotTo(CFrame.new(target + Vector3.new(0, 3, 0)) * model:GetPivot().Rotation)
 			return true
 		end
 		task.wait(0.25)
 	end
-	return false
+	if model.Parent then
+		model:PivotTo(CFrame.new(target + Vector3.new(0, 3, 0)) * model:GetPivot().Rotation)
+	end
+	return true
 end
 
 function NPC.Face(model: Model, lookAt: Vector3)

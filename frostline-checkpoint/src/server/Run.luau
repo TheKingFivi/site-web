@@ -397,13 +397,13 @@ function Run:WirePrompts(lane)
 	self:Connect(
 		prompts.Approve.Triggered,
 		guard(function()
-			self:Decide(lane, true)
+			self:DecideAndExplain(lane, true)
 		end)
 	)
 	self:Connect(
 		prompts.Deny.Triggered,
 		guard(function()
-			self:Decide(lane, false)
+			self:DecideAndExplain(lane, false)
 		end)
 	)
 	self:Connect(
@@ -434,13 +434,13 @@ function Run:WirePrompts(lane)
 	self:Connect(
 		room.Approve.Triggered,
 		guard(function()
-			self:Decide(lane, true)
+			self:DecideAndExplain(lane, true)
 		end)
 	)
 	self:Connect(
 		room.Deny.Triggered,
 		guard(function()
-			self:Decide(lane, false)
+			self:DecideAndExplain(lane, false)
 		end)
 	)
 end
@@ -644,10 +644,27 @@ function Run:SendToRoom(lane)
 	end)
 end
 
-function Run:Decide(lane, approve: boolean)
+-- Stamp from a prompt: tell the player why nothing happened, if it didn't.
+function Run:DecideAndExplain(lane, approve: boolean)
+	local ok, why = self:Decide(lane, approve)
+	if not ok and why then
+		Remotes.notify(lane.Player, why, "warn")
+	end
+end
+
+function Run:Decide(lane, approve: boolean): (boolean, string?)
 	local current = lane.Current
-	if not current or (current.Stage ~= "Inspect" and current.Stage ~= "Room") then
-		return
+	if not current then
+		return false, "No passenger at your desk yet."
+	end
+	if current.Stage == "Desk" then
+		return false, "Take their ID from the tray first (E)."
+	end
+	if current.Stage == "ToRoom" then
+		return false, "Wait until they sit down in the interrogation room."
+	end
+	if current.Stage ~= "Inspect" and current.Stage ~= "Room" then
+		return false, "Your passenger is still walking to the desk."
 	end
 	local player = lane.Player
 	current.Stage = "Leaving"
@@ -735,12 +752,13 @@ function Run:Decide(lane, approve: boolean)
 			self:FinishPlayer(lane, false, "fired")
 			self:CheckAllDone()
 		end)
-		return
+		return true
 	end
 	self:Objective(lane, 5, if correct then "Good call" else "Mistake", "Next passenger coming up...")
 	task.delay(2.5, function()
 		self:NextPassenger(lane)
 	end)
+	return true
 end
 
 function Run:CheckAllDone()

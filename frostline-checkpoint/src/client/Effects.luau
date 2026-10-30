@@ -345,7 +345,36 @@ local function updateWaypoint()
 	end)
 end
 
+-- First person locks the mouse to the centre. While any panel or menu is open (each carries a
+-- "FreeMouse" button) we unlock it every frame, right after the camera scripts lock it.
+local function freeMouseWhilePanelsOpen()
+	local gui = player:WaitForChild("PlayerGui")
+	local open = 0
+	for _, d in gui:GetDescendants() do
+		if d.Name == "FreeMouse" then
+			open += 1
+		end
+	end
+	gui.DescendantAdded:Connect(function(d)
+		if d.Name == "FreeMouse" then
+			open += 1
+		end
+	end)
+	gui.DescendantRemoving:Connect(function(d)
+		if d.Name == "FreeMouse" then
+			open = math.max(0, open - 1)
+		end
+	end)
+	RunService:BindToRenderStep("FrostlineFreeMouse", Enum.RenderPriority.Camera.Value + 1, function()
+		if open > 0 then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			UserInputService.MouseIconEnabled = true
+		end
+	end)
+end
+
 function Effects.Init()
+	task.spawn(freeMouseWhilePanelsOpen)
 	ProximityPromptService.PromptShown:Connect(showPrompt)
 	Remotes.Speech.OnClientEvent:Connect(speech)
 

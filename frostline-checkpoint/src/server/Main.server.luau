@@ -164,10 +164,9 @@ end
 Remotes.Decide.OnServerInvoke = function(player, approve)
 	local run, lane = Run.ForPlayer(player)
 	if run and lane and type(approve) == "boolean" then
-		run:Decide(lane, approve)
-		return true
+		return run:Decide(lane, approve)
 	end
-	return false
+	return false, "You're not on shift."
 end
 
 Remotes.Taser.OnServerEvent:Connect(function(player, aim)

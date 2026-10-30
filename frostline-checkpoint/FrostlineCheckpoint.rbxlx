@@ -2010,10 +2010,9 @@ end
 Remotes.Decide.OnServerInvoke = function(player, approve)
 	local run, lane = Run.ForPlayer(player)
 	if run and lane and type(approve) == "boolean" then
-		run:Decide(lane, approve)
-		return true
+		return run:Decide(lane, approve)
 	end
-	return false
+	return false, "You're not on shift."
 end
 
 Remotes.Taser.OnServerEvent:Connect(function(player, aim)
@@ -2591,15 +2590,31 @@ function NPC.WalkTo(model: Model, target: Vector3, timeout: number?): boolean
 		return false
 	end
 	local deadline = os.clock() + (timeout or 20)
+	local best, lastProgress = math.huge, os.clock()
 	while model.Parent and os.clock() < deadline do
 		humanoid:MoveTo(target)
 		local flat = Vector3.new(hrp.Position.X - target.X, 0, hrp.Position.Z - target.Z)
-		if flat.Magnitude < 1.6 then
+		local dist = flat.Magnitude
+		if dist < 1.6 then
+			return true
+		end
+		if dist < best - 0.3 then
+			best, lastProgress = dist, os.clock()
+		elseif os.clock() - lastProgress > 1.5 then
+			humanoid.Jump = true -- bumped into something: hop over it
+		end
+		if os.clock() - lastProgress > 3.5 then
+			-- Still stuck: skip to the spot so the shift never stalls
+			warn("[NPC] " .. model.Name .. " was stuck; moving it to its next spot")
+			model:PivotTo(CFrame.new(target + Vector3.new(0, 3, 0)) * model:GetPivot().Rotation)
 			return true
 		end
 		task.wait(0.25)
 	end
-	return false
+	if model.Parent then
+		model:PivotTo(CFrame.new(target + Vector3.new(0, 3, 0)) * model:GetPivot().Rotation)
+	end
+	return true
 end
 
 function NPC.Face(model: Model, lookAt: Vector3)
@@ -3877,13 +3892,13 @@ function Run:WirePrompts(lane)
 	self:Connect(
 		prompts.Approve.Triggered,
 		guard(function()
-			self:Decide(lane, true)
+			self:DecideAndExplain(lane, true)
 		end)
 	)
 	self:Connect(
 		prompts.Deny.Triggered,
 		guard(function()
-			self:Decide(lane, false)
+			self:DecideAndExplain(lane, false)
 		end)
 	)
 	self:Connect(
@@ -3914,13 +3929,13 @@ function Run:WirePrompts(lane)
 	self:Connect(
 		room.Approve.Triggered,
 		guard(function()
-			self:Decide(lane, true)
+			self:DecideAndExplain(lane, true)
 		end)
 	)
 	self:Connect(
 		room.Deny.Triggered,
 		guard(function()
-			self:Decide(lane, false)
+			self:DecideAndExplain(lane, false)
 		end)
 	)
 end
@@ -4124,10 +4139,27 @@ function Run:SendToRoom(lane)
 	end)
 end
 
-function Run:Decide(lane, approve: boolean)
+-- Stamp from a prompt: tell the player why nothing happened, if it didn't.
+function Run:DecideAndExplain(lane, approve: boolean)
+	local ok, why = self:Decide(lane, approve)
+	if not ok and why then
+		Remotes.notify(lane.Player, why, "warn")
+	end
+end
+
+function Run:Decide(lane, approve: boolean): (boolean, string?)
 	local current = lane.Current
-	if not current or (current.Stage ~= "Inspect" and current.Stage ~= "Room") then
-		return
+	if not current then
+		return false, "No passenger at your desk yet."
+	end
+	if current.Stage == "Desk" then
+		return false, "Take their ID from the tray first (E)."
+	end
+	if current.Stage == "ToRoom" then
+		return false, "Wait until they sit down in the interrogation room."
+	end
+	if current.Stage ~= "Inspect" and current.Stage ~= "Room" then
+		return false, "Your passenger is still walking to the desk."
 	end
 	local player = lane.Player
 	current.Stage = "Leaving"
@@ -4215,12 +4247,13 @@ function Run:Decide(lane, approve: boolean)
 			self:FinishPlayer(lane, false, "fired")
 			self:CheckAllDone()
 		end)
-		return
+		return true
 	end
 	self:Objective(lane, 5, if correct then "Good call" else "Mistake", "Next passenger coming up...")
 	task.delay(2.5, function()
 		self:NextPassenger(lane)
 	end)
+	return true
 end
 
 function Run:CheckAllDone()
@@ -6562,7 +6595,36 @@ local function updateWaypoint()
 	end)
 end
 
+-- First person locks the mouse to the centre. While any panel or menu is open (each carries a
+-- "FreeMouse" button) we unlock it every frame, right after the camera scripts lock it.
+local function freeMouseWhilePanelsOpen()
+	local gui = player:WaitForChild("PlayerGui")
+	local open = 0
+	for _, d in gui:GetDescendants() do
+		if d.Name == "FreeMouse" then
+			open += 1
+		end
+	end
+	gui.DescendantAdded:Connect(function(d)
+		if d.Name == "FreeMouse" then
+			open += 1
+		end
+	end)
+	gui.DescendantRemoving:Connect(function(d)
+		if d.Name == "FreeMouse" then
+			open = math.max(0, open - 1)
+		end
+	end)
+	RunService:BindToRenderStep("FrostlineFreeMouse", Enum.RenderPriority.Camera.Value + 1, function()
+		if open > 0 then
+			UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+			UserInputService.MouseIconEnabled = true
+		end
+	end)
+end
+
 function Effects.Init()
+	task.spawn(freeMouseWhilePanelsOpen)
 	ProximityPromptService.PromptShown:Connect(showPrompt)
 	Remotes.Speech.OnClientEvent:Connect(speech)
 
@@ -7704,7 +7766,7 @@ local function panel(title: string, color: Color3, size: Vector2): Frame
 	-- A visible Modal button frees the mouse in first person while the panel is open
 	UI.new(
 		"TextButton",
-		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(0, 0), Parent = frame }
+		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(1, 1), Parent = frame }
 	)
 	current = frame
 	UI.pop(frame)
@@ -7885,10 +7947,16 @@ function tools.Passport(data)
 	})
 	-- Stamp buttons
 	UI.button(body, "✔ APPROVE (F)", C.Green, function()
-		Remotes.Decide:InvokeServer(true)
+		local ok, why = Remotes.Decide:InvokeServer(true)
+		if not ok and why and Inspect.Toast then
+			Inspect.Toast(why, "warn")
+		end
 	end, { Size = UDim2.fromOffset(330, 70), Position = UDim2.fromOffset(10, 352) })
 	UI.button(body, "✖ DENY (G)", C.Red, function()
-		Remotes.Decide:InvokeServer(false)
+		local ok, why = Remotes.Decide:InvokeServer(false)
+		if not ok and why and Inspect.Toast then
+			Inspect.Toast(why, "warn")
+		end
 	end, { Size = UDim2.fromOffset(330, 70), Position = UDim2.fromOffset(356, 352) })
 end
 
@@ -8429,6 +8497,7 @@ local Effects = require(script.Parent.Effects)
 
 HUD.Init()
 Inspect.Init(HUD.Gui)
+Inspect.Toast = HUD.Toast
 Effects.Init()
 
 -- The RULES button opens the rulebook from the latest shift state
@@ -8655,7 +8724,7 @@ function UI.modal(parent: Instance, subtitle: string, title: string, icon: strin
 	local _ = close
 	UI.new(
 		"TextButton",
-		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(0, 0), Parent = frame }
+		{ Name = "FreeMouse", Modal = true, BackgroundTransparency = 1, Text = "", Size = UDim2.fromOffset(1, 1), Parent = frame }
 	)
 	local body = UI.new("Frame", {
 		Size = UDim2.new(1, 0, 1, -82),
