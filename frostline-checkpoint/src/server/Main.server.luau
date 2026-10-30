@@ -70,8 +70,26 @@ local PRO_NAMES = {
 	StreetLamp = true,
 	Pumpkin = true,
 }
-for _, child in workspace:GetChildren() do
+-- Studio may name the import after the file, "Scene", or anything else: recognise it by what's inside.
+local function isProImport(child: Instance): boolean
 	if PRO_NAMES[child.Name] then
+		return true
+	end
+	if not (child:IsA("Model") or child:IsA("Folder")) then
+		return false
+	end
+	if child:FindFirstChild("Civilian_AnchorA", true) or child:FindFirstChild("Monster_AnchorA", true) then
+		return true
+	end
+	for name in PRO_NAMES do
+		if child:FindFirstChild(name) then
+			return true
+		end
+	end
+	return false
+end
+for _, child in workspace:GetChildren() do
+	if isProImport(child) then
 		child.Parent = proModels
 	end
 end
