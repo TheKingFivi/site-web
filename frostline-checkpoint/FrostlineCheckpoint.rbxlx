@@ -1924,8 +1924,11 @@ local function isProImport(child: Instance): boolean
 	if not (child:IsA("Model") or child:IsA("Folder")) then
 		return false
 	end
-	if child:FindFirstChild("Civilian_AnchorA", true) or child:FindFirstChild("Monster_AnchorA", true) then
-		return true
+	-- Any character set (skins, passengers, monster) carries "<Owner>_AnchorA"
+	for _, d in child:GetDescendants() do
+		if string.sub(d.Name, -8) == "_AnchorA" then
+			return true
+		end
 	end
 	for name in PRO_NAMES do
 		if child:FindFirstChild(name) then
